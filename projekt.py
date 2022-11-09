@@ -100,28 +100,6 @@ def eval(model, X):
     # koristite torch.Tensor.detach() i torch.Tensor.numpy()
     return model.forward(torch.Tensor(X)).detach().cpu().numpy()
 
-def eval_after_epoch(self, x_val, y_val):
-    y_pred = self.ev(x_val)
-
-    y_true = np.argmax(y_val, axis=1)
-    y_pred = np.argmax(y_pred, axis=1)
-
-    cm = confusion_matrix(y_true, y_pred)
-    cm_diag = np.diag(cm)
-
-    sums = [np.sum(cm, axis=y) for y in [None, 0, 1]]
-
-    sums[0] = np.maximum(1, sums[0])
-    for i in range(1, len(sums)):
-        sums[i][sums[i] == 0] = 1
-
-    accuracy = np.sum(cm_diag) / sums[0]
-    precision, recall = [np.mean(cm_diag / x) for x in sums[1:]]
-    f1 = (2 * precision * recall) / (precision + recall)
-
-    return {"acc": accuracy, "pr": precision, "re": recall, "f1": f1}
-
-
 def pt_decfun(model):
     return lambda X: np.argmax(model.forward(torch.tensor(X)).detach().numpy(), axis=1)
 
@@ -144,6 +122,7 @@ def eval_perf_multi(Y, Y_):
 
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
+
     # print(x_test.shape)
     # print(y_train.shape)
     # first_image = x_test[0]
@@ -156,9 +135,14 @@ if __name__ == "__main__":
     model = PTDeep(torch.relu, 784, 100, 10).to(device)
     train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=1000, param_delta=0.1)
 
+    probs = eval(model, x_train.cuda())
+    y_pred = np.argmax(probs, axis=1)
+    acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
+    print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
+
+    print("-------------------------------------------")
+
     probs = eval(model, x_test.cuda())
     y_pred = np.argmax(probs, axis=1)
-
-    print(type(y_test), type(y_pred))
     acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
     print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
