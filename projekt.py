@@ -190,13 +190,15 @@ if __name__ == "__main__":
     y_train_oh = torch.tensor(y_train_oh).cuda()
 
     start_time = time.time()
-    #model = FCmodel(torch.relu, 784, 250, 10).to(device)
-    model = ConvModel().to(device)
-    losses = train(model, x_train, y_train_oh, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=2, conv=True)
+    model = FCmodel(torch.relu, 784, 250, 10).to(device)
+    losses = train(model, x_train, y_train_oh, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=50)
+    #model = ConvModel().to(device)
+    #losses = train(model, x_train, y_train_oh, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=2, conv=True)
     print("--- %s seconds ---" % (time.time() - start_time))
+    torch.save(model, './models/fcmodel2.txt')
     """
-    model = torch.load('./models/convmodel2.txt')
-    # torch.save(model, './models/convmodel2.txt')
+    model = torch.load('./models/convmodel1.txt')
+    
     model.eval()
 
     with torch.no_grad():
@@ -204,21 +206,21 @@ if __name__ == "__main__":
         batch_size = 500
         X_batch = torch.split(x_train, batch_size)
 
-        print("Train data:")
+        print("----------\nTrain data:\n----------")
         probs = []
         for x_train in X_batch: 
             probs.append(eval(model, x_train.cuda()))
         probs = np.array(probs).reshape(-1, 10)
         y_pred = np.argmax(probs, axis=1)
         acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
-        print(f"Accuracy = {acc}\nPrecision = \n{pr}\nConfusion matrix = \n{m}")
+        print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
 
-        print("-------------------------------------------\nTest data:")
+        print(print("----------\nTest data:\n----------"))
         
         probs = eval(model, x_test.cuda())
         y_pred = np.argmax(probs, axis=1)
         acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
-        print(f"Accuracy = {acc}\nPrecision = \n{pr}\nConfusion matrix = \n{m}")
+        print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
 
         # show_loss(losses)
         # show_weights(model.weights[0])
