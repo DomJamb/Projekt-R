@@ -31,14 +31,14 @@ class PTDeep(nn.Module):
         for id in range(len(neurons) - 1):
             w.append(nn.Parameter(torch.randn(neurons[id], neurons[id + 1]).to(device), requires_grad=True))
             b.append(nn.Parameter(torch.zeros(neurons[id + 1]).to(device), requires_grad=True))        
-        self.weigths = nn.ParameterList(w)
+        self.weights = nn.ParameterList(w)
         self.biases = nn.ParameterList(b)
 
     def forward(self, X):
         s = X.float()
-        for wi, bi in zip(self.weigths[:-1], self.biases[:-1]):
+        for wi, bi in zip(self.weights[:-1], self.biases[:-1]):
             s = self.f(torch.mm(s, wi) + bi)
-        return torch.softmax(torch.mm(s, self.weigths[-1]) + self.biases[-1], dim=1)
+        return torch.softmax(torch.mm(s, self.weights[-1]) + self.biases[-1], dim=1)
 
     def get_loss(self, X, Yoh_):
         return -torch.mean(torch.sum(Yoh_ * torch.log(X + 1e-20), dim=1))
@@ -46,13 +46,13 @@ class PTDeep(nn.Module):
     def get_norm(self):
         norm = 0
 
-        for weights in self.weigths:
+        for weights in self.weights:
             norm += torch.norm(weights)
 
         return norm
 
-
-def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=500):
+#batch_size = 100 postize najbolji rezultat (95.7% acc), ali najduze izvodenje
+def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000):
     if device == "cuda":
         X = X.to(device)
         Yoh_ = Yoh_.to(device)
@@ -109,6 +109,13 @@ def eval_perf_multi(Y, Y_):
 
     return accuracy, pr, M
 
+def show_weights(weights):
+    fig = plt.figure(figsize=(16, 8))
+    #for i in range(len(weights)):
+    #    plt.subplot(2, 5, i + 1)
+    plt.imshow((weights.detach().cpu().numpy()).reshape(250, 10))
+    plt.show()
+
 def show_loss(loss):
     fig = plt.figure(figsize=(16, 10))
     plt.plot(range(len(loss)), np.array(loss), label="Loss")
@@ -121,9 +128,12 @@ def show_loss(loss):
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
 
+    """
     y_train_oh = class_to_onehot(y_train)
     model = PTDeep(torch.relu, 784, 250, 10).to(device)
-    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.08)
+    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07)
+    """
+    model = torch.load('./model.txt')
 
     probs = eval(model, x_train.cuda())
     y_pred = np.argmax(probs, axis=1)
@@ -137,4 +147,7 @@ if __name__ == "__main__":
     acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
     print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
 
-    show_loss(losses)
+    #torch.save(model, './model.txt')
+    #show_loss(losses)
+    #print(model.weights[0].detach().cpu().numpy())
+    show_weights(model.weights[1])
