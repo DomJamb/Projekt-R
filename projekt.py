@@ -184,7 +184,7 @@ def show_loss(loss):
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
 
-    # """
+    """
     x_train = x_train.cuda()
     y_train_oh = class_to_onehot(y_train)
     y_train_oh = torch.tensor(y_train_oh).cuda()
@@ -194,34 +194,33 @@ if __name__ == "__main__":
     model = ConvModel().to(device)
     losses = train(model, x_train, y_train_oh, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=2, conv=True)
     print("--- %s seconds ---" % (time.time() - start_time))
-    # """
-    # model = torch.load('./models/convmodel2.txt')
+    """
+    model = torch.load('./models/convmodel2.txt')
     # torch.save(model, './models/convmodel2.txt')
     model.eval()
 
     with torch.no_grad():
-        """
-        #batch_size = 500
-        #X_batch = torch.split(x_test, batch_size)
+        
+        batch_size = 500
+        X_batch = torch.split(x_train, batch_size)
 
-        #probs = []
-        #for x_train in X_batch: 
-        probs = eval(model, x_train.cuda())
+        print("Train data:")
+        probs = []
+        for x_train in X_batch: 
+            probs.append(eval(model, x_train.cuda()))
+        probs = np.array(probs).reshape(-1, 10)
         y_pred = np.argmax(probs, axis=1)
         acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
-        print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
+        print(f"Accuracy = {acc}\nPrecision = \n{pr}\nConfusion matrix = \n{m}")
 
+        print("-------------------------------------------\nTest data:")
         
-        print("-------------------------------------------")
-        """
         probs = eval(model, x_test.cuda())
         y_pred = np.argmax(probs, axis=1)
         acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
-        print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
+        print(f"Accuracy = {acc}\nPrecision = \n{pr}\nConfusion matrix = \n{m}")
 
-        # torch.save(model, './models/fcmodel.txt')
         # show_loss(losses)
-        # print(model.weights[0].detach().cpu().numpy())
         # show_weights(model.weights[0])
         
     model.train()
