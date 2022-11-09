@@ -23,11 +23,6 @@ def load_mnist(dataset_root="./data/"):
 
 class PTDeep(nn.Module):
     def __init__(self, f, *neurons):
-        """Arguments:
-        - D: dimensions of each datapoint
-        """
-        # inicijalizirati parametre (koristite nn.Parameter):
-        # imena mogu biti self.W, self.b
         super().__init__()
         self.f = f
         
@@ -38,70 +33,64 @@ class PTDeep(nn.Module):
             b.append(nn.Parameter(torch.zeros(neurons[id + 1]).to(device), requires_grad=True))        
         self.weigths = nn.ParameterList(w)
         self.biases = nn.ParameterList(b)
-        #print(self.weigths)
-        #print(self.biases)
-
-    # def count_params(self):
-    #     tensor_shapes = [(p[0], p[1][0].shape) for p in self.named_parameters()]
-    #     total_parameters = np.sum([p.numel() for p in self.parameters()])
-    #     return tensor_shapes, total_parameters
 
     def forward(self, X):
-        # unaprijedni prolaz modela: izračunati vjerojatnosti
-        #   koristiti: torch.mm, torch.softmax
         s = X.float()
         for wi, bi in zip(self.weigths[:-1], self.biases[:-1]):
             s = self.f(torch.mm(s, wi) + bi)
         return torch.softmax(torch.mm(s, self.weigths[-1]) + self.biases[-1], dim=1)
 
     def get_loss(self, X, Yoh_):
-        # formulacija gubitka
-        #   koristiti: torch.log, torch.mean, torch.sum
         return -torch.mean(torch.sum(Yoh_ * torch.log(X + 1e-20), dim=1))
 
+    def get_norm(self):
+        norm = 0
 
-def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3):
-    """Arguments:
-        - X: model inputs [NxD], type: torch.Tensor
-        - Yoh_: ground truth [NxC], type: torch.Tensor
-        - param_niter: number of training iterations
-        - param_delta: learning rate
-    """
+        for weights in self.weigths:
+            norm += torch.norm(weights)
 
+        return norm
+
+
+def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=500):
     if device == "cuda":
         X = X.to(device)
         Yoh_ = Yoh_.to(device)
     
-    # inicijalizacija optimizatora
     opt = torch.optim.SGD(model.parameters(), lr=param_delta)
+    losses = []
 
-    # petlja učenja
-    # ispisujte gubitak tijekom učenja
     for epoch in range(param_niter):
-        probs = model.forward(X)
-        loss = model.get_loss(probs, Yoh_)
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+        #print(f"_______________Epoha____________ {epoch}")
+        permutations = torch.randperm(len(X))
+        X_total = X.detach()[permutations]
+        Y_total = Yoh_.detach()[permutations]
+
+        X_batch = torch.split(X_total, batch_size)
+        Y_batch = torch.split(Y_total, batch_size)
+
+        temp_loss = []
+
+        for i, (x, y) in enumerate(zip(X_batch, Y_batch)):
+            #print("Batch = " + str(i))
+            probs = model.forward(x)
+            loss = model.get_loss(probs, y) + param_lambda * model.get_norm()
+            temp_loss.append(loss.detach().cpu().item())
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+        loss = np.mean(temp_loss)
+        losses.append(loss)
 
         if epoch % 10 == 0:
             print(f'Epoch {epoch}/{param_niter} -> loss = {loss}')
-    return
+        
+    return losses
 
 
 def eval(model, X):
-    """Arguments:
-        - model: type: PTLogreg
-        - X: actual datapoints [NxD], type: np.array
-        Returns: predicted class probabilites [NxC], type: np.array
-    """
-    # ulaz je potrebno pretvoriti u torch.Tensor
-    # izlaze je potrebno pretvoriti u numpy.array
-    # koristite torch.Tensor.detach() i torch.Tensor.numpy()
     return model.forward(torch.Tensor(X)).detach().cpu().numpy()
-
-def pt_decfun(model):
-    return lambda X: np.argmax(model.forward(torch.tensor(X)).detach().numpy(), axis=1)
 
 def eval_perf_multi(Y, Y_):
     pr = []
@@ -120,20 +109,21 @@ def eval_perf_multi(Y, Y_):
 
     return accuracy, pr, M
 
+def show_loss(loss):
+    fig = plt.figure(figsize=(16, 10))
+    plt.plot(range(len(loss)), np.array(loss), label="Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss functions")
+    plt.title("Loss function over the epochs")
+    plt.legend()
+    plt.show()
+
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
 
-    # print(x_test.shape)
-    # print(y_train.shape)
-    # first_image = x_test[0]
-    # first_image = np.array(first_image, dtype='float')
-    # pixels = first_image.reshape((28, 28))
-    # plt.imshow(pixels, cmap='gray')
-    # plt.show()
-
     y_train_oh = class_to_onehot(y_train)
-    model = PTDeep(torch.relu, 784, 100, 10).to(device)
-    train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=1000, param_delta=0.1)
+    model = PTDeep(torch.relu, 784, 250, 10).to(device)
+    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.08)
 
     probs = eval(model, x_train.cuda())
     y_pred = np.argmax(probs, axis=1)
@@ -146,3 +136,5 @@ if __name__ == "__main__":
     y_pred = np.argmax(probs, axis=1)
     acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
     print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
+
+    show_loss(losses)
