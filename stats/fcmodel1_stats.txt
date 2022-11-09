@@ -19,7 +19,6 @@ Confusion matrix
 ----------
 Test data:
 ----------
-None
 Accuracy
 0.9476
 Precision

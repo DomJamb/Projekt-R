@@ -197,7 +197,8 @@ if __name__ == "__main__":
     print("--- %s seconds ---" % (time.time() - start_time))
     torch.save(model, './models/fcmodel2.txt')
     """
-    model = torch.load('./models/convmodel1.txt')
+
+    model = torch.load('./models/convmodel2.txt')
     
     model.eval()
 
@@ -215,7 +216,7 @@ if __name__ == "__main__":
         acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
         print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
 
-        print(print("----------\nTest data:\n----------"))
+        print("----------\nTest data:\n----------")
         
         probs = eval(model, x_test.cuda())
         y_pred = np.argmax(probs, axis=1)
