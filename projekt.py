@@ -7,7 +7,7 @@ import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class PTDeep(nn.Module):
+class FCmodel(nn.Module):
     def __init__(self, f, *neurons):
         super().__init__()
         self.f = f
@@ -37,6 +37,59 @@ class PTDeep(nn.Module):
 
         return norm
 
+class ConvModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, padding=2)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, padding=2)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.fc1 = nn.Linear(in_features=1568, out_features=512)
+        self.fc2 = nn.Linear(in_features=512, out_features=10)
+
+        nn.init.kaiming_normal_(self.conv1.weight)
+        nn.init.constant_(self.conv1.bias, 0.)
+
+        nn.init.kaiming_normal_(self.conv2.weight)
+        nn.init.constant_(self.conv2.bias, 0.)
+
+        nn.init.kaiming_normal_(self.fc1.weight)
+        nn.init.constant_(self.fc1.bias, 0.)
+
+        nn.init.kaiming_normal_(self.fc2.weight)
+        nn.init.constant_(self.fc2.bias, 0.)
+
+    def forward(self, X):
+        
+        X = X.reshape(-1, 1, 28, 28).float()
+        if not isinstance(X, torch.Tensor):
+            X = torch.tensor(X)
+
+        X.to(device)
+
+        conv1 = self.conv1(X)
+        conv1 = self.maxpool1(conv1)
+        conv1 = torch.relu(conv1)
+
+        conv2 = self.conv2(conv1)
+        conv2 = self.maxpool2(conv2)
+        conv2 = torch.relu(conv2)
+
+        flt = conv2.view((conv2.shape[0], -1))
+        fc1 = self.fc1(flt)
+        fc1 = torch.relu(fc1)
+
+        fc2 = self.fc2(fc1)
+        softmax = torch.softmax(fc2, dim=1)
+
+        return softmax
+
+    def get_loss(self, X, Yoh_):
+        return -torch.mean(torch.sum(Yoh_ * torch.log(X + 1e-20), dim=1))
+
 def load_mnist(dataset_root="./data/"):
     mnist_train = datasets.MNIST(dataset_root, train=True, download=False)
     mnist_test = datasets.MNIST(dataset_root, train=False, download=False)
@@ -53,6 +106,7 @@ def class_to_onehot(Y):
     return Yoh
 
 def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000):
+
     if device == "cuda":
         X = X.to(device)
         Yoh_ = Yoh_.to(device)
@@ -74,7 +128,7 @@ def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3,
         for i, (x, y) in enumerate(zip(X_batch, Y_batch)):
             #print("Batch = " + str(i))
             probs = model.forward(x)
-            loss = model.get_loss(probs, y) + param_lambda * model.get_norm()
+            loss = model.get_loss(probs, y) # + param_lambda * model.get_norm()
             temp_loss.append(loss.detach().cpu().item())
             opt.zero_grad()
             loss.backward()
@@ -83,7 +137,7 @@ def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3,
         loss = np.mean(temp_loss)
         losses.append(loss)
 
-        if epoch % 10 == 0:
+        if epoch % 2 == 0:
             print(f'Epoch {epoch}/{param_niter} -> loss = {loss}')
         
     return losses
@@ -130,33 +184,41 @@ def show_loss(loss):
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
 
-    # """
+    """
     y_train_oh = class_to_onehot(y_train)
     start_time = time.time()
-    model = PTDeep(torch.relu, 784, 250, 10).to(device)
-    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07, batch_size=500)
+    #model = FCmodel(torch.relu, 784, 250, 10).to(device)
+    model = ConvModel().to(device)
+    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=20, param_delta=0.07, batch_size=50)
     print("--- %s seconds ---" % (time.time() - start_time))
-    # """
-    # model = torch.load('.models/fcmodel1.txt')
-
+    """
+    model = torch.load('./models/convmodel2.txt')
+    #torch.save(model, './models/convmodel2.txt')
     model.eval()
 
     with torch.no_grad():
+        """
+        #batch_size = 500
+        #X_batch = torch.split(x_test, batch_size)
+
+        #probs = []
+        #for x_train in X_batch: 
         probs = eval(model, x_train.cuda())
         y_pred = np.argmax(probs, axis=1)
         acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
         print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
 
+        
         print("-------------------------------------------")
-
+        """
         probs = eval(model, x_test.cuda())
         y_pred = np.argmax(probs, axis=1)
         acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
         print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
 
-        #torch.save(model, '.models/fcmodel.txt')
-        show_loss(losses)
-        #print(model.weights[0].detach().cpu().numpy())
-        show_weights(model.weights[0])
-
+        # torch.save(model, './models/fcmodel.txt')
+        # show_loss(losses)
+        # print(model.weights[0].detach().cpu().numpy())
+        # show_weights(model.weights[0])
+        
     model.train()
