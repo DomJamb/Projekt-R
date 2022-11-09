@@ -7,21 +7,6 @@ import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def class_to_onehot(Y):
-    Yoh = np.zeros((len(Y), max(Y) + 1))
-    Yoh[range(len(Y)), Y] = 1
-    return Yoh
-
-def load_mnist(dataset_root="./data/"):
-    mnist_train = datasets.MNIST(dataset_root, train=True, download=False)
-    mnist_test = datasets.MNIST(dataset_root, train=False, download=False)
-
-    x_train, y_train = mnist_train.data, mnist_train.targets
-    x_test, y_test = mnist_test.data, mnist_test.targets
-    x_train, x_test = x_train.float().div_(255.0).reshape(-1, 784), x_test.float().div_(255.0).reshape(-1, 784)
-
-    return x_train, y_train, x_test, y_test
-
 class PTDeep(nn.Module):
     def __init__(self, f, *neurons):
         super().__init__()
@@ -52,7 +37,21 @@ class PTDeep(nn.Module):
 
         return norm
 
-#batch_size = 100 postize najbolji rezultat (95.65% acc), ali najduze izvodenje ~ 263s
+def load_mnist(dataset_root="./data/"):
+    mnist_train = datasets.MNIST(dataset_root, train=True, download=False)
+    mnist_test = datasets.MNIST(dataset_root, train=False, download=False)
+
+    x_train, y_train = mnist_train.data, mnist_train.targets
+    x_test, y_test = mnist_test.data, mnist_test.targets
+    x_train, x_test = x_train.float().div_(255.0).reshape(-1, 784), x_test.float().div_(255.0).reshape(-1, 784)
+
+    return x_train, y_train, x_test, y_test
+
+def class_to_onehot(Y):
+    Yoh = np.zeros((len(Y), max(Y) + 1))
+    Yoh[range(len(Y)), Y] = 1
+    return Yoh
+
 def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000):
     if device == "cuda":
         X = X.to(device)
@@ -135,10 +134,10 @@ if __name__ == "__main__":
     y_train_oh = class_to_onehot(y_train)
     start_time = time.time()
     model = PTDeep(torch.relu, 784, 250, 10).to(device)
-    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07, batch_size=50)
+    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07, batch_size=500)
     print("--- %s seconds ---" % (time.time() - start_time))
     # """
-    # model = torch.load('./fcmodel1.txt')
+    # model = torch.load('.models/fcmodel1.txt')
 
     model.eval()
 
@@ -155,7 +154,7 @@ if __name__ == "__main__":
         acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
         print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
 
-        #torch.save(model, './model.txt')
+        #torch.save(model, '.models/fcmodel.txt')
         show_loss(losses)
         #print(model.weights[0].detach().cpu().numpy())
         show_weights(model.weights[0])
