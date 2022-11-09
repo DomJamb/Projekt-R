@@ -41,10 +41,10 @@ class ConvModel(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, padding=2)
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, padding="same")
         self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, padding=2)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, padding="same")
         self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.fc1 = nn.Linear(in_features=1568, out_features=512)
@@ -105,7 +105,7 @@ def class_to_onehot(Y):
     Yoh[range(len(Y)), Y] = 1
     return Yoh
 
-def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000):
+def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000, epoch_print=100, conv=False):
 
     if device == "cuda":
         X = X.to(device)
@@ -128,7 +128,7 @@ def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3,
         for i, (x, y) in enumerate(zip(X_batch, Y_batch)):
             #print("Batch = " + str(i))
             probs = model.forward(x)
-            loss = model.get_loss(probs, y) # + param_lambda * model.get_norm()
+            loss = model.get_loss(probs, y) + (param_lambda * model.get_norm() if not conv else 0)
             temp_loss.append(loss.detach().cpu().item())
             opt.zero_grad()
             loss.backward()
@@ -137,7 +137,7 @@ def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3,
         loss = np.mean(temp_loss)
         losses.append(loss)
 
-        if epoch % 2 == 0:
+        if epoch % epoch_print == 0:
             print(f'Epoch {epoch}/{param_niter} -> loss = {loss}')
         
     return losses
@@ -184,16 +184,19 @@ def show_loss(loss):
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
 
-    """
+    # """
+    x_train = x_train.cuda()
     y_train_oh = class_to_onehot(y_train)
+    y_train_oh = torch.tensor(y_train_oh).cuda()
+
     start_time = time.time()
     #model = FCmodel(torch.relu, 784, 250, 10).to(device)
     model = ConvModel().to(device)
-    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=20, param_delta=0.07, batch_size=50)
+    losses = train(model, x_train, y_train_oh, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=2, conv=True)
     print("--- %s seconds ---" % (time.time() - start_time))
-    """
-    model = torch.load('./models/convmodel2.txt')
-    #torch.save(model, './models/convmodel2.txt')
+    # """
+    # model = torch.load('./models/convmodel2.txt')
+    # torch.save(model, './models/convmodel2.txt')
     model.eval()
 
     with torch.no_grad():
