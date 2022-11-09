@@ -3,6 +3,7 @@ import torch.nn as nn
 from torchvision import datasets
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -51,7 +52,7 @@ class PTDeep(nn.Module):
 
         return norm
 
-#batch_size = 100 postize najbolji rezultat (95.7% acc), ali najduze izvodenje
+#batch_size = 100 postize najbolji rezultat (95.65% acc), ali najduze izvodenje ~ 263s
 def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000):
     if device == "cuda":
         X = X.to(device)
@@ -111,9 +112,10 @@ def eval_perf_multi(Y, Y_):
 
 def show_weights(weights):
     fig = plt.figure(figsize=(16, 8))
-    print(len(weights))
-    for i in range(250):
-        plt.subplot(5, 50, i + 1)
+    # print(len(weights))
+    #print(weights[:, 0].detach().cpu().numpy().shape)
+    for i in range(10):
+        plt.subplot(2, 5, i + 1)
         plt.imshow((weights[:, i].detach().cpu().numpy()).reshape(28, 28))
     plt.show()
 
@@ -131,24 +133,31 @@ if __name__ == "__main__":
 
     """
     y_train_oh = class_to_onehot(y_train)
+    start_time = time.time()
     model = PTDeep(torch.relu, 784, 250, 10).to(device)
-    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07)
+    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07, batch_size=100)
+    print("--- %s seconds ---" % (time.time() - start_time))
     """
-    model = torch.load('./model.txt')
+    model = torch.load('./fcmodel1.txt')
 
-    probs = eval(model, x_train.cuda())
-    y_pred = np.argmax(probs, axis=1)
-    acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
-    print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
+    model.eval()
 
-    print("-------------------------------------------")
+    with torch.no_grad():
+        probs = eval(model, x_train.cuda())
+        y_pred = np.argmax(probs, axis=1)
+        acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
+        print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
 
-    probs = eval(model, x_test.cuda())
-    y_pred = np.argmax(probs, axis=1)
-    acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
-    print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
+        print("-------------------------------------------")
 
-    #torch.save(model, './model.txt')
-    #show_loss(losses)
-    #print(model.weights[0].detach().cpu().numpy())
-    show_weights(model.weights[0])
+        probs = eval(model, x_test.cuda())
+        y_pred = np.argmax(probs, axis=1)
+        acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
+        print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
+
+        #torch.save(model, './model.txt')
+        #show_loss(losses)
+        #print(model.weights[0].detach().cpu().numpy())
+        show_weights(model.weights[0])
+
+    model.train()
