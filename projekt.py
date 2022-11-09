@@ -131,14 +131,14 @@ def show_loss(loss):
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
 
-    """
+    # """
     y_train_oh = class_to_onehot(y_train)
     start_time = time.time()
     model = PTDeep(torch.relu, 784, 250, 10).to(device)
-    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07, batch_size=100)
+    losses = train(model, x_train.cuda(), torch.tensor(y_train_oh).cuda(), param_niter=300, param_delta=0.07, batch_size=50)
     print("--- %s seconds ---" % (time.time() - start_time))
-    """
-    model = torch.load('./fcmodel1.txt')
+    # """
+    # model = torch.load('./fcmodel1.txt')
 
     model.eval()
 
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         print(f"acc = {acc}\npr = {pr}\nm = \n{m}")
 
         #torch.save(model, './model.txt')
-        #show_loss(losses)
+        show_loss(losses)
         #print(model.weights[0].detach().cpu().numpy())
         show_weights(model.weights[0])
 
