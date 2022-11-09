@@ -111,9 +111,10 @@ def eval_perf_multi(Y, Y_):
 
 def show_weights(weights):
     fig = plt.figure(figsize=(16, 8))
-    #for i in range(len(weights)):
-    #    plt.subplot(2, 5, i + 1)
-    plt.imshow((weights.detach().cpu().numpy()).reshape(250, 10))
+    print(len(weights))
+    for i in range(250):
+        plt.subplot(5, 50, i + 1)
+        plt.imshow((weights[:, i].detach().cpu().numpy()).reshape(28, 28))
     plt.show()
 
 def show_loss(loss):
@@ -150,4 +151,4 @@ if __name__ == "__main__":
     #torch.save(model, './model.txt')
     #show_loss(losses)
     #print(model.weights[0].detach().cpu().numpy())
-    show_weights(model.weights[1])
+    show_weights(model.weights[0])
