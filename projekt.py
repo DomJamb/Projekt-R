@@ -105,14 +105,14 @@ def class_to_onehot(Y):
     Yoh[range(len(Y)), Y] = 1
     return Yoh
 
-def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000, epoch_print=100, conv=False):
+def train(model, X, Y, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000, epoch_print=100, conv=False):
 
-    if device == "cuda":
-        X = X.to(device)
-        Yoh_ = Yoh_.to(device)
+    Yoh_ = class_to_onehot(Y.detach().cpu())
+    Yoh_ = torch.tensor(Yoh_).cuda()
     
     opt = torch.optim.SGD(model.parameters(), lr=param_delta)
     losses = []
+    train_accuracies = []
 
     for epoch in range(param_niter):
         #print(f"_______________Epoha____________ {epoch}")
@@ -139,8 +139,9 @@ def train(model, X, Yoh_, param_niter=1000, param_delta=1e-2, param_lambda=1e-3,
 
         if epoch % epoch_print == 0:
             print(f'Epoch {epoch}/{param_niter} -> loss = {loss}')
+            train_accuracies.append(eval_after_epoch(model, X, Y.detach().cpu()))
         
-    return losses
+    return losses, train_accuracies
 
 
 def eval(model, X):
@@ -163,6 +164,18 @@ def eval_perf_multi(Y, Y_):
 
     return accuracy, pr, M
 
+def eval_after_epoch(model, x, y_):
+    batch_size = 500
+    x_batch = torch.split(x, batch_size)
+
+    probs = []
+    for x in x_batch: 
+        probs.append(eval(model, x.cuda()))
+    probs = np.array(probs).reshape(-1, 10)
+    y_pred = np.argmax(probs, axis=1)
+    acc, _, _ = eval_perf_multi(y_.numpy(), y_pred)
+    return acc
+
 def show_weights(weights):
     fig = plt.figure(figsize=(16, 8))
     # print(len(weights))
@@ -181,21 +194,29 @@ def show_loss(loss):
     plt.legend()
     plt.show()
 
+def show_train_accuracies(accs, name, path):
+    fig = plt.figure(figsize=(16,5))
+    plt.plot(range(len(accs)), np.array(accs))
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.title("Train accuracy over the epochs")
+    #plt.savefig(path + name)
+    plt.show()
+
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
 
     """
     x_train = x_train.cuda()
-    y_train_oh = class_to_onehot(y_train)
-    y_train_oh = torch.tensor(y_train_oh).cuda()
+    y_train = y_train.cuda()
 
     start_time = time.time()
     model = FCmodel(torch.relu, 784, 250, 10).to(device)
-    losses = train(model, x_train, y_train_oh, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=50)
-    #model = ConvModel().to(device)
-    #losses = train(model, x_train, y_train_oh, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=2, conv=True)
+    losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)
+    # model = ConvModel().to(device)
+    # losses, train_accuracies = train(model, x_train, y_train, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=1, conv=True)
     print("--- %s seconds ---" % (time.time() - start_time))
-    torch.save(model, './models/fcmodel2.txt')
+    #torch.save(model, './models/fcmodel2.txt')
     """
 
     model = torch.load('./models/convmodel2.txt')
@@ -213,17 +234,19 @@ if __name__ == "__main__":
             probs.append(eval(model, x_train.cuda()))
         probs = np.array(probs).reshape(-1, 10)
         y_pred = np.argmax(probs, axis=1)
-        acc, pr, m = eval_perf_multi(y_train.numpy(), y_pred)
+        acc, pr, m = eval_perf_multi(y_train.detach().cpu().numpy(), y_pred)
         print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
 
         print("----------\nTest data:\n----------")
         
         probs = eval(model, x_test.cuda())
         y_pred = np.argmax(probs, axis=1)
-        acc, pr, m = eval_perf_multi(y_test.numpy(), y_pred)
+        acc, pr, m = eval_perf_multi(y_test.detach().cpu().numpy(), y_pred)
         print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
 
         # show_loss(losses)
         # show_weights(model.weights[0])
+        # show_train_accuracies(train_accuracies, "fcmodel1_train_acc.jpg", "./stats/")
+        # show_train_accuracies(train_accuracies, "convmodel1_train_acc.jpg", "./stats/")
         
     model.train()
