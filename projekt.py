@@ -178,8 +178,6 @@ def eval_after_epoch(model, x, y_):
 
 def show_weights(weights):
     fig = plt.figure(figsize=(16, 8))
-    # print(len(weights))
-    #print(weights[:, 0].detach().cpu().numpy().shape)
     for i in range(10):
         plt.subplot(2, 5, i + 1)
         plt.imshow((weights[:, i].detach().cpu().numpy()).reshape(28, 28))
@@ -194,13 +192,15 @@ def show_loss(loss):
     plt.legend()
     plt.show()
 
-def show_train_accuracies(accs, name, path):
+def show_train_accuracies(accs, epochs, name, path):
     fig = plt.figure(figsize=(16,5))
-    plt.plot(range(len(accs)), np.array(accs))
+    epochs_step = epochs / 10
+    epochs = np.arange(0, epochs, epochs_step)
+    plt.plot(epochs, np.array(accs))
     plt.xlabel("Epochs")
     plt.ylabel("Accuracy")
     plt.title("Train accuracy over the epochs")
-    #plt.savefig(path + name)
+    plt.savefig(path + name)
     plt.show()
 
 if __name__ == "__main__":
@@ -213,8 +213,10 @@ if __name__ == "__main__":
     start_time = time.time()
     model = FCmodel(torch.relu, 784, 250, 10).to(device)
     losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)
+
     # model = ConvModel().to(device)
     # losses, train_accuracies = train(model, x_train, y_train, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=1, conv=True)
+
     print("--- %s seconds ---" % (time.time() - start_time))
     #torch.save(model, './models/fcmodel2.txt')
     """
@@ -246,7 +248,7 @@ if __name__ == "__main__":
 
         # show_loss(losses)
         # show_weights(model.weights[0])
-        # show_train_accuracies(train_accuracies, "fcmodel1_train_acc.jpg", "./stats/")
-        # show_train_accuracies(train_accuracies, "convmodel1_train_acc.jpg", "./stats/")
+        # show_train_accuracies(train_accuracies, 300, "fcmodel1_train_acc.jpg", "./stats/")
+        # show_train_accuracies(train_accuracies, 10, "convmodel1_train_acc.jpg", "./stats/")
         
     model.train()
