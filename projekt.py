@@ -249,6 +249,52 @@ def evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500):
 
     return train_acc, test_acc
 
+def attack(image, data_grad, epsilon=0.3):
+    data_grad = torch.sign(data_grad)
+    attacked_image = image + data_grad * epsilon
+    return torch.clamp(attacked_image)
+
+def attack_model(model, x_test, y_test, batch_size=500):
+    print("Evaluating the model with attacked images...")
+    model.eval()
+
+    x_test = x_test[0:2]
+    y_test = y_test[0:2]
+
+    with torch.no_grad():
+        #print("----------\nTest data:\n----------")
+        for input, correct_class in zip(x_test, y_test):
+            #print(input)
+            print(correct_class)
+            probs = eval(model, input.cuda())
+            y_pred = np.argmax(probs, axis=1)
+            print(y_pred)
+            
+            if correct_class != torch.tensor(y_pred):
+                continue
+            else:    
+                data_grad = None
+                print(data_grad)
+                attacked_image = attack(input, data_grad, 0.3)
+
+                tprobs = eval(model, attacked_image.cuda())
+                attacked_pred = np.argmax(tprobs, axis=1)
+                if attacked_pred == correct_class:
+                    print("Still classifies correctly...")
+
+                fig = plt.figure(figsize=(16, 10))
+                plt.subplot(2, 5, 1)
+                plt.imshow((input.detach().cpu().numpy()).reshape(28, 28))
+                plt.title("Originalna slika")
+                
+                plt.subplot(2, 5, 2)
+                plt.imshow((attacked_image.detach().cpu().numpy()).reshape(28, 28))
+                plt.title("Izmijenjena slika")
+                plt.show()
+        
+    model.train()
+    print("Finished evaluating the model...")
+
 def show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers):
     fc_accs = list()
     fc_times = list()
@@ -338,9 +384,11 @@ if __name__ == "__main__":
     #graph_details(fc_times, fc_accs, conv_times, conv_accs)
 
     model = torch.load('./models/conv_model_2.txt')
-    train_acc, test_acc = evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500)
-    print("Test accuracy:")
-    print(test_acc)
+    #train_acc, test_acc = evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500)
+    #print("Test accuracy:")
+    #print(test_acc)
+
+    attack_model(model, x_test, y_test, 200)
 
     """
     start_time = time.time()
