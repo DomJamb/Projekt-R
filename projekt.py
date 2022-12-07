@@ -258,18 +258,18 @@ def attack_model_test(model, x_test, y_test, batch_size=500):
     print("Evaluating the model with attacked images...")
     model.eval()
 
-    x_test = x_test[0:2]
-    y_test = y_test[0:2]
+    #x_test = x_test[0:2]
+    #y_test = y_test[0:2]
 
     #sx_test.requires_grad = True
 
     with torch.no_grad():
         for input, correct_class in zip(x_test, y_test):
             input.requires_grad = True
-            print(correct_class)
+            #print(correct_class)
             probs = eval(model, input.cuda())
             y_pred = np.argmax(probs, axis=1)
-            print(y_pred)
+            #print(y_pred)
             
             if correct_class != torch.tensor(y_pred):
                 continue
