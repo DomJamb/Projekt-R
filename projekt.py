@@ -38,29 +38,47 @@ class FCmodel(nn.Module):
         return norm
 
 class ConvModel(nn.Module):
-    def __init__(self):
+    def __init__(self, no_layers=2):
         super().__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, padding="same")
-        self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        conv = list()
+        maxpool = list()
+        fc = list()
 
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, padding="same")
-        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        in_channels = 1
+        out_channels = 16
+        input_dim = 28
 
-        self.fc1 = nn.Linear(in_features=1568, out_features=512)
-        self.fc2 = nn.Linear(in_features=512, out_features=10)
+        weights = list()
+        biases = list()
 
-        nn.init.kaiming_normal_(self.conv1.weight)
-        nn.init.constant_(self.conv1.bias, 0.)
+        for i in range(no_layers):
+            conv.append(nn.Conv2d(in_channels, out_channels, kernel_size=5, padding="same"))
+            in_channels = out_channels
+            out_channels *= 2
+            maxpool.append(nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True))
+            input_dim = round(input_dim/2)
+            total = input_dim**2 * in_channels
+            weights.append(nn.init.kaiming_normal_(conv[-1].weight))      
+            biases.append(nn.init.constant_(conv[-1].bias, 0.))
 
-        nn.init.kaiming_normal_(self.conv2.weight)
-        nn.init.constant_(self.conv2.bias, 0.)
+        if (total > 2048):
+            fc.append(nn.Linear(in_features=total, out_features=1024))
+            fc.append(nn.Linear(in_features=1024, out_features=512))
+            fc.append(nn.Linear(in_features=512, out_features=10))
+        else:
+            fc.append(nn.Linear(in_features=total, out_features=512))
+            fc.append(nn.Linear(in_features=512, out_features=10))
 
-        nn.init.kaiming_normal_(self.fc1.weight)
-        nn.init.constant_(self.fc1.bias, 0.)
+        for fc_layer in fc:
+            weights.append(nn.init.kaiming_normal_(fc_layer.weight))
+            biases.append(nn.init.constant_(fc_layer.bias, 0.))
 
-        nn.init.kaiming_normal_(self.fc2.weight)
-        nn.init.constant_(self.fc2.bias, 0.)
+        self.conv = conv
+        self.maxpool = maxpool
+        self.fc = fc
+        self.weights = nn.ParameterList(weights)
+        self.biases = nn.ParameterList(biases)
 
     def forward(self, X):
         
@@ -70,21 +88,20 @@ class ConvModel(nn.Module):
 
         X.to(device)
 
-        conv1 = self.conv1(X)
-        conv1 = self.maxpool1(conv1)
-        conv1 = torch.relu(conv1)
+        conv = X
+        for i in range(len(self.conv)):
+            conv = self.conv[i](conv)
+            conv = self.maxpool[i](conv)
+            conv = torch.relu(conv)
 
-        conv2 = self.conv2(conv1)
-        conv2 = self.maxpool2(conv2)
-        conv2 = torch.relu(conv2)
+        fc = conv.view((conv.shape[0], -1))
 
-        flt = conv2.view((conv2.shape[0], -1))
-        fc1 = self.fc1(flt)
-        fc1 = torch.relu(fc1)
+        for i in range(len(self.fc) - 1):
+            fc = self.fc[i](fc)
+            fc = torch.relu(fc)
 
-        fc2 = self.fc2(fc1)
-        softmax = torch.softmax(fc2, dim=1)
-
+        fc = self.fc[-1](fc)
+        softmax = torch.softmax(fc, dim=1)
         return softmax
 
     def get_loss(self, X, Yoh_):
@@ -203,13 +220,129 @@ def show_train_accuracies(accs, epochs, name, path):
     plt.savefig(path + name)
     plt.show()
 
+def evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500):
+    print("Evaluating the model...")
+    model.eval()
+
+    with torch.no_grad():
+        
+        X_batch = torch.split(x_train, batch_size)
+
+        #print("----------\nTrain data:\n----------")
+        probs = []
+        for x_train in X_batch: 
+            probs.append(eval(model, x_train.cuda()))
+        probs = np.array(probs).reshape(-1, 10)
+        y_pred = np.argmax(probs, axis=1)
+        train_acc, pr, m = eval_perf_multi(y_train.detach().cpu().numpy(), y_pred)
+        #print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
+
+        #print("----------\nTest data:\n----------")
+        
+        probs = eval(model, x_test.cuda())
+        y_pred = np.argmax(probs, axis=1)
+        test_acc, pr, m = eval_perf_multi(y_test.detach().cpu().numpy(), y_pred)
+        #print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
+        
+    model.train()
+    print("Finished evaluating the model...")
+
+    return train_acc, test_acc
+
+def show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers):
+    fc_accs = list()
+    fc_times = list()
+
+    conv_accs = list()
+    conv_times = list()
+    i = 1
+    
+    for architecture in fc_architectures:
+        start_time = time.time()
+        fc_model = FCmodel(torch.relu, *architecture).to(device)
+        losses, train_accuracies = train(fc_model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=200, epoch_print=30) #optimalno batch_size = 50
+
+        fc_times.append(time.time() - start_time)
+        #torch.save(fc_model, f'./models/fc_model_{i}.txt')
+        i += 1
+        train_acc, test_acc = evaluate_model(fc_model, x_train, y_train, x_test, y_test)
+        fc_accs.append(test_acc)
+
+    for i in range(no_layers):
+        start_time = time.time()
+        conv_model = ConvModel(i+1).to(device)
+        losses, train_accuracies = train(conv_model, x_train, y_train, param_niter=10, param_delta=0.07, batch_size=200, epoch_print=1, conv=True)
+
+        conv_times.append(time.time() - start_time)
+        #torch.save(conv_model, f'./models/conv_model_{i+1}.txt')
+        train_acc, test_acc = evaluate_model(conv_model, x_train, y_train, x_test, y_test)
+        conv_accs.append(test_acc)
+    
+    print("FC model times: ")
+    print(fc_times)
+    print("FC model accuracies: ")
+    print(fc_accs)
+
+    print("Conv model times: ")
+    print(conv_times)
+    print("Conv model accuracies: ")
+    print(conv_accs)
+
+    return fc_times, fc_accs, conv_times, conv_accs
+
+def graph_stats(fc_times, fc_accs, conv_times, conv_accs):
+    fig = plt.figure(figsize=(16,5))
+
+    plt.plot(fc_accs, fc_times, 'r', label="FC model")
+    plt.plot(conv_accs, conv_times, 'b', label="Conv model")
+    plt.xlabel("Accuracies")
+    plt.ylabel("Train times")
+    plt.title("Accuracy/train time graph for FC and Conv models")
+    plt.legend()
+    plt.show()
+
+def graph_details(fc_times, fc_accs, conv_times, conv_accs):
+
+    layer_num = [1, 2, 3]
+    fig = plt.figure(figsize=(16,10))
+
+    plt.subplot(2, 1, 1)
+    plt.plot(layer_num, fc_times, 'r', label="FC model")
+    plt.plot(layer_num, conv_times, 'b', label="Conv model")
+    plt.xlabel("Number of layers")
+    plt.ylabel("Train time")
+    plt.title("Number of layers / Train time graph for FC and Conv models")
+    plt.legend(loc="center right")
+
+    plt.subplot(2, 1, 2)
+    plt.plot(layer_num, fc_accs, 'r', label="FC model")
+    plt.plot(layer_num, conv_accs, 'b', label="Conv model")
+    plt.xlabel("Number of layers")
+    plt.ylabel("Accuracy")
+    plt.title("Number of layers / Accuracy graph for FC and Conv models")
+    plt.legend(loc="center right")
+    #plt.savefig('./stats/statistics.jpg')
+    plt.show()
+
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test = load_mnist()
-
-    """
+    
     x_train = x_train.cuda()
     y_train = y_train.cuda()
 
+    fc_architectures = [[784, 50, 10], [784, 150, 10], [784, 250, 10]]
+    no_layers = 3
+
+    #fc_times, fc_accs, conv_times, conv_accs = show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers)
+    #graph_stats(fc_times, fc_accs, conv_times, conv_accs)
+    #graph_details(fc_times, fc_accs, conv_times, conv_accs)
+
+    model = torch.load('./models/conv_model_2.txt')
+    train_acc, test_acc = evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500)
+    print("Test accuracy:")
+    print(test_acc)
+
+    """
     start_time = time.time()
     model = FCmodel(torch.relu, 784, 250, 10).to(device)
     losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)
@@ -219,36 +352,11 @@ if __name__ == "__main__":
 
     print("--- %s seconds ---" % (time.time() - start_time))
     #torch.save(model, './models/fcmodel2.txt')
-    """
 
     model = torch.load('./models/convmodel2.txt')
-    
-    model.eval()
 
-    with torch.no_grad():
-        
-        batch_size = 500
-        X_batch = torch.split(x_train, batch_size)
-
-        print("----------\nTrain data:\n----------")
-        probs = []
-        for x_train in X_batch: 
-            probs.append(eval(model, x_train.cuda()))
-        probs = np.array(probs).reshape(-1, 10)
-        y_pred = np.argmax(probs, axis=1)
-        acc, pr, m = eval_perf_multi(y_train.detach().cpu().numpy(), y_pred)
-        print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
-
-        print("----------\nTest data:\n----------")
-        
-        probs = eval(model, x_test.cuda())
-        y_pred = np.argmax(probs, axis=1)
-        acc, pr, m = eval_perf_multi(y_test.detach().cpu().numpy(), y_pred)
-        print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
-
-        # show_loss(losses)
-        # show_weights(model.weights[0])
-        # show_train_accuracies(train_accuracies, 300, "fcmodel1_train_acc.jpg", "./stats/")
-        # show_train_accuracies(train_accuracies, 10, "convmodel1_train_acc.jpg", "./stats/")
-        
-    model.train()
+    show_loss(losses)
+    show_weights(model.weights[0])
+    show_train_accuracies(train_accuracies, 300, "fcmodel1_train_acc.jpg", "./stats/")
+    show_train_accuracies(train_accuracies, 10, "convmodel1_train_acc.jpg", "./stats/")
+    """    
