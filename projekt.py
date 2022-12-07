@@ -254,53 +254,55 @@ def attack(image, data_grad, koef=0.3):
     attacked_image = image + data_grad * koef
     return torch.clamp(attacked_image)
 
-def attack_model_test(model, x_test, y_test, batch_size=500):
+def attack_model_test(model, x_test, y_test):
     print("Evaluating the model with attacked images...")
     model.eval()
 
-    #x_test = x_test[0:2]
-    #y_test = y_test[0:2]
+    x_test = x_test[0:2]
+    y_test = y_test[0:2]
 
     #sx_test.requires_grad = True
 
-    with torch.no_grad():
-        for input, correct_class in zip(x_test, y_test):
-            input.requires_grad = True
-            #print(correct_class)
-            probs = eval(model, input.cuda())
-            y_pred = np.argmax(probs, axis=1)
-            #print(y_pred)
-            
-            if correct_class != torch.tensor(y_pred):
-                continue
+    #with torch.no_grad():
+    for input, correct_class in zip(x_test, y_test):
+        input.requires_grad = True
+        #print(correct_class)
+        probs = eval(model, input.cuda())
+        y_pred = np.argmax(probs, axis=1)
+        #print(y_pred)
+        
+        if correct_class != torch.tensor(y_pred):
+            continue
 
-            correct_class_oh = np.zeros(10)
-            correct_class_oh[int(correct_class)-1] = 1
-            loss = model.get_loss(torch.tensor(probs), torch.tensor(correct_class_oh))
-            #print(loss)
+        correct_class_oh = np.zeros(10)
+        correct_class_oh[int(correct_class)-1] = 1
+        loss = model.get_loss(torch.tensor(probs), torch.tensor(correct_class_oh))
+        #loss.requires_grad = True
+        #print(loss)
 
-            model.zero_grad()
-            loss.backward()
+        #print(model)
+        model.zero_grad()
+        loss.backward()
 
-            data_grad = input.grad.data
-            print(data_grad)
-            attacked_image = attack(input, data_grad, 0.3)
+        data_grad = input.grad.data
+        print(data_grad)
+        attacked_image = attack(input, data_grad, 0.3)
 
-            tprobs = eval(model, attacked_image.cuda())
-            attacked_pred = np.argmax(tprobs, axis=1)
-            if attacked_pred == correct_class:
-                print("Still classifies correctly...")
-                continue
+        tprobs = eval(model, attacked_image.cuda())
+        attacked_pred = np.argmax(tprobs, axis=1)
+        if attacked_pred == correct_class:
+            print("Still classifies correctly...")
+            continue
 
-            fig = plt.figure(figsize=(16, 10))
-            plt.subplot(2, 5, 1)
-            plt.imshow((input.detach().cpu().numpy()).reshape(28, 28))
-            plt.title("Originalna slika")
-            
-            plt.subplot(2, 5, 2)
-            plt.imshow((attacked_image.detach().cpu().numpy()).reshape(28, 28))
-            plt.title("Izmijenjena slika")
-            plt.show()
+        fig = plt.figure(figsize=(16, 10))
+        plt.subplot(2, 5, 1)
+        plt.imshow((input.detach().cpu().numpy()).reshape(28, 28))
+        plt.title("Originalna slika")
+        
+        plt.subplot(2, 5, 2)
+        plt.imshow((attacked_image.detach().cpu().numpy()).reshape(28, 28))
+        plt.title("Izmijenjena slika")
+        plt.show()
         
     model.train()
     print("Finished evaluating the model...")
@@ -398,7 +400,7 @@ if __name__ == "__main__":
     #print("Test accuracy:")
     #print(test_acc)
 
-    attack_model_test(model, x_test, y_test, 200)
+    attack_model_test(model, x_test, y_test)
 
     """
     start_time = time.time()
