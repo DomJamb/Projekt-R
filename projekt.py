@@ -290,6 +290,7 @@ def attack_model_test(model, x_test, y_test, batch_size=500):
             attacked_pred = np.argmax(tprobs, axis=1)
             if attacked_pred == correct_class:
                 print("Still classifies correctly...")
+                continue
 
             fig = plt.figure(figsize=(16, 10))
             plt.subplot(2, 5, 1)
