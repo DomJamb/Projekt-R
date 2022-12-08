@@ -7,6 +7,13 @@ import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+class AdvExample():
+    def __init__(self, initial_pred, attacked_pred, inital_img, attacked_img):
+        self.inital_pred = initial_pred
+        self.attacked_pred = attacked_pred
+        self.initial_img = inital_img
+        self.attacked_img = attacked_img
+
 class FCmodel(nn.Module):
     def __init__(self, f, *neurons):
         super().__init__()
@@ -252,60 +259,112 @@ def evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500):
 def attack(image, data_grad, koef=0.3):
     data_grad = torch.sign(data_grad)
     attacked_image = image + data_grad * koef
-    return torch.clamp(attacked_image)
+    return torch.clamp(attacked_image, min=0, max=1)
 
-def attack_model_test(model, x_test, y_test):
-    print("Evaluating the model with attacked images...")
+def attack_model_test(model, x_test, y_test, koefs=[0.1, 0.2, 0.3], adv_cnt=3):
     model.eval()
 
-    x_test = x_test[0:2]
-    y_test = y_test[0:2]
+    adv_dict = dict()
+    accs = dict()
 
-    #sx_test.requires_grad = True
+    for koef in koefs:
+        permutations = torch.randperm(len(x_test))
+        x_test = x_test.detach()[permutations]
+        y_test = y_test.detach()[permutations]
 
-    #with torch.no_grad():
-    for input, correct_class in zip(x_test, y_test):
-        input.requires_grad = True
-        #print(correct_class)
-        probs = eval(model, input.cuda())
-        y_pred = np.argmax(probs, axis=1)
-        #print(y_pred)
-        
-        if correct_class != torch.tensor(y_pred):
-            continue
+        adv_list = list()
+        for input, correct_class in zip(x_test, y_test):
+            input = input.cuda()
+            input.requires_grad = True
 
-        correct_class_oh = np.zeros(10)
-        correct_class_oh[int(correct_class)-1] = 1
-        loss = model.get_loss(torch.tensor(probs), torch.tensor(correct_class_oh))
-        #loss.requires_grad = True
-        #print(loss)
+            probs = model.forward(input)
+            y_pred = np.argmax(probs.detach().cpu().numpy(), axis=1)
+            
+            if correct_class != torch.tensor(y_pred):
+                continue
+            
+            correct_class_oh = np.zeros(10)
+            correct_class_oh[int(correct_class)-1] = 1
+            loss = model.get_loss(probs, torch.tensor(correct_class_oh).cuda())
 
-        #print(model)
-        model.zero_grad()
-        loss.backward()
+            model.zero_grad()
+            loss.backward()
 
-        data_grad = input.grad.data
-        print(data_grad)
-        attacked_image = attack(input, data_grad, 0.3)
+            data_grad = input.grad.data
+            attacked_image = attack(input, data_grad, koef)
 
-        tprobs = eval(model, attacked_image.cuda())
-        attacked_pred = np.argmax(tprobs, axis=1)
-        if attacked_pred == correct_class:
-            print("Still classifies correctly...")
-            continue
+            tprobs = eval(model, attacked_image.cuda())
+            attacked_pred = np.argmax(tprobs, axis=1)
 
-        fig = plt.figure(figsize=(16, 10))
-        plt.subplot(2, 5, 1)
-        plt.imshow((input.detach().cpu().numpy()).reshape(28, 28))
-        plt.title("Originalna slika")
-        
-        plt.subplot(2, 5, 2)
-        plt.imshow((attacked_image.detach().cpu().numpy()).reshape(28, 28))
-        plt.title("Izmijenjena slika")
-        plt.show()
+            if torch.tensor(attacked_pred) == correct_class:
+                #print("Still classifies correctly...")
+                continue
+
+            if len(adv_list) < adv_cnt:
+                adv_list.append(AdvExample(int(y_pred), int(attacked_pred), input.detach().cpu().numpy(), attacked_image.detach().cpu().numpy()))
+            else:
+                break
+
+        adv_dict.update({koef: adv_list})
         
     model.train()
-    print("Finished evaluating the model...")
+
+    graph_attack(adv_dict)
+
+def graph_attack(adv_dict):
+
+    fig = plt.figure(figsize=(20,10))
+    length = len(adv_dict.keys())
+    keys = list(adv_dict.keys())
+
+    subfigs = fig.subfigures(nrows=length, ncols=1)
+    if not isinstance(subfigs, np.ndarray):
+        subfigs = [subfigs]
+
+    for row, subfig in enumerate(subfigs):
+        key = keys[row]
+        adv_list = adv_dict[key]
+        adv_cnt = len(adv_list)
+        subfig.suptitle(f'Koeficijent: {key}')
+
+        axs = subfig.subplots(nrows=1, ncols=adv_cnt * 2)
+        i = 0
+
+        for adv in adv_list:    
+            ax = axs[i]
+            ax.plot()
+            ax.imshow((adv.initial_img).reshape(28, 28))
+            ax.set_title(f"Originalna predikcija: {adv.inital_pred}")
+            ax.axis('off')
+            i += 1
+
+            ax = axs[i]
+            ax.plot()
+            ax.imshow((adv.attacked_img).reshape(28, 28))
+            ax.set_title(f"Izmijenjena predikcija: {adv.attacked_pred}")
+            ax.axis('off')
+            i += 1
+
+    # for ind, key in enumerate(adv_dict.keys()):
+    #     adv_list = adv_dict[key]
+
+    #     i = ind * length * 2 + 1
+    #     for adv in adv_list:    
+    #         plt.subplot(length, length * 2, i)
+    #         plt.imshow((adv.initial_img).reshape(28, 28))
+    #         plt.title(f"Originalna slika - predikcija: {adv.inital_pred}")
+    #         plt.axis('off')
+    #         i += 1
+
+    #         plt.subplot(length, length * 2, i)
+    #         plt.imshow((adv.attacked_img).reshape(28, 28))
+    #         plt.title(f"Izmijenjena slika - predikcija: {adv.attacked_pred}")
+    #         plt.axis('off')
+    #         i += 1
+
+    plt.subplots_adjust(top=0.75)
+    #plt.savefig('./stats/adversarial_examples.jpg')
+    plt.show()
 
 def show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers):
     fc_accs = list()
@@ -401,6 +460,7 @@ if __name__ == "__main__":
     #print(test_acc)
 
     attack_model_test(model, x_test, y_test)
+
 
     """
     start_time = time.time()
