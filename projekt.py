@@ -1,18 +1,16 @@
 import torch
 import torch.nn as nn
-from torchvision import datasets
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from util import load_mnist, class_to_onehot
+from train_util import get_loss, eval_after_epoch
+from test_util import evaluate_model
+from attack_funcs import attack_model_test
+from graphing_funcs import show_loss, show_train_accuracies, show_weights, graph_stats, graph_details
 
-class AdvExample():
-    def __init__(self, initial_pred, attacked_pred, inital_img, attacked_img):
-        self.inital_pred = initial_pred
-        self.attacked_pred = attacked_pred
-        self.initial_img = inital_img
-        self.attacked_img = attacked_img
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class FCmodel(nn.Module):
     def __init__(self, f, *neurons):
@@ -32,9 +30,6 @@ class FCmodel(nn.Module):
         for wi, bi in zip(self.weights[:-1], self.biases[:-1]):
             s = self.f(torch.mm(s, wi) + bi)
         return torch.softmax(torch.mm(s, self.weights[-1]) + self.biases[-1], dim=1)
-
-    def get_loss(self, X, Yoh_):
-        return -torch.mean(torch.sum(Yoh_ * torch.log(X + 1e-20), dim=1))
 
     def get_norm(self):
         norm = 0
@@ -111,28 +106,10 @@ class ConvModel(nn.Module):
         softmax = torch.softmax(fc, dim=1)
         return softmax
 
-    def get_loss(self, X, Yoh_):
-        return -torch.mean(torch.sum(Yoh_ * torch.log(X + 1e-20), dim=1))
-
-def load_mnist(dataset_root="./data/"):
-    mnist_train = datasets.MNIST(dataset_root, train=True, download=False)
-    mnist_test = datasets.MNIST(dataset_root, train=False, download=False)
-
-    x_train, y_train = mnist_train.data, mnist_train.targets
-    x_test, y_test = mnist_test.data, mnist_test.targets
-    x_train, x_test = x_train.float().div_(255.0).reshape(-1, 784), x_test.float().div_(255.0).reshape(-1, 784)
-
-    return x_train, y_train, x_test, y_test
-
-def class_to_onehot(Y):
-    Yoh = np.zeros((len(Y), max(Y) + 1))
-    Yoh[range(len(Y)), Y] = 1
-    return Yoh
-
 def train(model, X, Y, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000, epoch_print=100, conv=False):
 
     Yoh_ = class_to_onehot(Y.detach().cpu())
-    Yoh_ = torch.tensor(Yoh_).cuda()
+    Yoh_ = torch.tensor(Yoh_).to(device)
     
     opt = torch.optim.SGD(model.parameters(), lr=param_delta)
     losses = []
@@ -152,7 +129,7 @@ def train(model, X, Y, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, ba
         for i, (x, y) in enumerate(zip(X_batch, Y_batch)):
             #print("Batch = " + str(i))
             probs = model.forward(x)
-            loss = model.get_loss(probs, y) + (param_lambda * model.get_norm() if not conv else 0)
+            loss = get_loss(probs, y) + (param_lambda * model.get_norm() if not conv else 0)
             temp_loss.append(loss.detach().cpu().item())
             opt.zero_grad()
             loss.backward()
@@ -166,205 +143,6 @@ def train(model, X, Y, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, ba
             train_accuracies.append(eval_after_epoch(model, X, Y.detach().cpu()))
         
     return losses, train_accuracies
-
-
-def eval(model, X):
-    return model.forward(torch.Tensor(X)).detach().cpu().numpy()
-
-def eval_perf_multi(Y, Y_):
-    pr = []
-    n = max(Y_) + 1
-    M = np.bincount(n * Y_ + Y, minlength=n * n).reshape(n, n)
-    for i in range(n):
-        tp_i = M[i, i]
-        fn_i = np.sum(M[i, :]) - tp_i
-        fp_i = np.sum(M[:, i]) - tp_i
-        tn_i = np.sum(M) - fp_i - fn_i - tp_i
-        recall_i = tp_i / (tp_i + fn_i)
-        precision_i = tp_i / (tp_i + fp_i)
-        pr.append((recall_i, precision_i))
-
-    accuracy = np.trace(M) / np.sum(M)
-
-    return accuracy, pr, M
-
-def eval_after_epoch(model, x, y_):
-    batch_size = 500
-    x_batch = torch.split(x, batch_size)
-
-    probs = []
-    for x in x_batch: 
-        probs.append(eval(model, x.cuda()))
-    probs = np.array(probs).reshape(-1, 10)
-    y_pred = np.argmax(probs, axis=1)
-    acc, _, _ = eval_perf_multi(y_.numpy(), y_pred)
-    return acc
-
-def show_weights(weights):
-    fig = plt.figure(figsize=(16, 8))
-    for i in range(10):
-        plt.subplot(2, 5, i + 1)
-        plt.imshow((weights[:, i].detach().cpu().numpy()).reshape(28, 28))
-    plt.show()
-
-def show_loss(loss):
-    fig = plt.figure(figsize=(16, 10))
-    plt.plot(range(len(loss)), np.array(loss), label="Loss")
-    plt.xlabel("Epochs")
-    plt.ylabel("Loss functions")
-    plt.title("Loss function over the epochs")
-    plt.legend()
-    plt.show()
-
-def show_train_accuracies(accs, epochs, name, path):
-    fig = plt.figure(figsize=(16,5))
-    epochs_step = epochs / 10
-    epochs = np.arange(0, epochs, epochs_step)
-    plt.plot(epochs, np.array(accs))
-    plt.xlabel("Epochs")
-    plt.ylabel("Accuracy")
-    plt.title("Train accuracy over the epochs")
-    plt.savefig(path + name)
-    plt.show()
-
-def evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500):
-    print("Evaluating the model...")
-    model.eval()
-
-    with torch.no_grad():
-        
-        X_batch = torch.split(x_train, batch_size)
-
-        #print("----------\nTrain data:\n----------")
-        probs = []
-        for x_train in X_batch: 
-            probs.append(eval(model, x_train.cuda()))
-        probs = np.array(probs).reshape(-1, 10)
-        y_pred = np.argmax(probs, axis=1)
-        train_acc, pr, m = eval_perf_multi(y_train.detach().cpu().numpy(), y_pred)
-        #print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
-
-        #print("----------\nTest data:\n----------")
-        
-        probs = eval(model, x_test.cuda())
-        y_pred = np.argmax(probs, axis=1)
-        test_acc, pr, m = eval_perf_multi(y_test.detach().cpu().numpy(), y_pred)
-        #print(f"Accuracy\n{acc}\nPrecision\n{pr}\nConfusion matrix\n{m}")
-        
-    model.train()
-    print("Finished evaluating the model...")
-
-    return train_acc, test_acc
-
-def attack(image, data_grad, koef=0.3):
-    data_grad = torch.sign(data_grad)
-    attacked_image = image + data_grad * koef
-    return torch.clamp(attacked_image, min=0, max=1)
-
-def attack_model_test(model, x_test, y_test, koefs=[0.1, 0.2, 0.3], adv_cnt=3):
-    model.eval()
-
-    adv_dict = dict()
-    accs = dict()
-
-    for koef in koefs:
-        permutations = torch.randperm(len(x_test))
-        x_test = x_test.detach()[permutations]
-        y_test = y_test.detach()[permutations]
-
-        adv_list = list()
-        for input, correct_class in zip(x_test, y_test):
-            input = input.cuda()
-            input.requires_grad = True
-
-            probs = model.forward(input)
-            y_pred = np.argmax(probs.detach().cpu().numpy(), axis=1)
-            
-            if correct_class != torch.tensor(y_pred):
-                continue
-            
-            correct_class_oh = np.zeros(10)
-            correct_class_oh[int(correct_class)-1] = 1
-            loss = model.get_loss(probs, torch.tensor(correct_class_oh).cuda())
-
-            model.zero_grad()
-            loss.backward()
-
-            data_grad = input.grad.data
-            attacked_image = attack(input, data_grad, koef)
-
-            tprobs = eval(model, attacked_image.cuda())
-            attacked_pred = np.argmax(tprobs, axis=1)
-
-            if torch.tensor(attacked_pred) == correct_class:
-                #print("Still classifies correctly...")
-                continue
-
-            if len(adv_list) < adv_cnt:
-                adv_list.append(AdvExample(int(y_pred), int(attacked_pred), input.detach().cpu().numpy(), attacked_image.detach().cpu().numpy()))
-            else:
-                break
-
-        adv_dict.update({koef: adv_list})
-        
-    model.train()
-
-    graph_attack(adv_dict)
-
-def graph_attack(adv_dict):
-
-    fig = plt.figure(figsize=(20,10))
-    length = len(adv_dict.keys())
-    keys = list(adv_dict.keys())
-
-    subfigs = fig.subfigures(nrows=length, ncols=1)
-    if not isinstance(subfigs, np.ndarray):
-        subfigs = [subfigs]
-
-    for row, subfig in enumerate(subfigs):
-        key = keys[row]
-        adv_list = adv_dict[key]
-        adv_cnt = len(adv_list)
-        subfig.suptitle(f'Koeficijent: {key}')
-
-        axs = subfig.subplots(nrows=1, ncols=adv_cnt * 2)
-        i = 0
-
-        for adv in adv_list:    
-            ax = axs[i]
-            ax.plot()
-            ax.imshow((adv.initial_img).reshape(28, 28))
-            ax.set_title(f"Originalna predikcija: {adv.inital_pred}")
-            ax.axis('off')
-            i += 1
-
-            ax = axs[i]
-            ax.plot()
-            ax.imshow((adv.attacked_img).reshape(28, 28))
-            ax.set_title(f"Izmijenjena predikcija: {adv.attacked_pred}")
-            ax.axis('off')
-            i += 1
-
-    # for ind, key in enumerate(adv_dict.keys()):
-    #     adv_list = adv_dict[key]
-
-    #     i = ind * length * 2 + 1
-    #     for adv in adv_list:    
-    #         plt.subplot(length, length * 2, i)
-    #         plt.imshow((adv.initial_img).reshape(28, 28))
-    #         plt.title(f"Originalna slika - predikcija: {adv.inital_pred}")
-    #         plt.axis('off')
-    #         i += 1
-
-    #         plt.subplot(length, length * 2, i)
-    #         plt.imshow((adv.attacked_img).reshape(28, 28))
-    #         plt.title(f"Izmijenjena slika - predikcija: {adv.attacked_pred}")
-    #         plt.axis('off')
-    #         i += 1
-
-    plt.subplots_adjust(top=0.75)
-    #plt.savefig('./stats/adversarial_examples.jpg')
-    plt.show()
 
 def show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers):
     fc_accs = list()
@@ -407,76 +185,36 @@ def show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers):
 
     return fc_times, fc_accs, conv_times, conv_accs
 
-def graph_stats(fc_times, fc_accs, conv_times, conv_accs):
-    fig = plt.figure(figsize=(16,5))
-
-    plt.plot(fc_accs, fc_times, 'r', label="FC model")
-    plt.plot(conv_accs, conv_times, 'b', label="Conv model")
-    plt.xlabel("Accuracies")
-    plt.ylabel("Train times")
-    plt.title("Accuracy/train time graph for FC and Conv models")
-    plt.legend()
-    plt.show()
-
-def graph_details(fc_times, fc_accs, conv_times, conv_accs):
-
-    layer_num = [1, 2, 3]
-    fig = plt.figure(figsize=(16,10))
-
-    plt.subplot(2, 1, 1)
-    plt.plot(layer_num, fc_times, 'r', label="FC model")
-    plt.plot(layer_num, conv_times, 'b', label="Conv model")
-    plt.xlabel("Number of layers")
-    plt.ylabel("Train time")
-    plt.title("Number of layers / Train time graph for FC and Conv models")
-    plt.legend(loc="center right")
-
-    plt.subplot(2, 1, 2)
-    plt.plot(layer_num, fc_accs, 'r', label="FC model")
-    plt.plot(layer_num, conv_accs, 'b', label="Conv model")
-    plt.xlabel("Number of layers")
-    plt.ylabel("Accuracy")
-    plt.title("Number of layers / Accuracy graph for FC and Conv models")
-    plt.legend(loc="center right")
-    #plt.savefig('./stats/statistics.jpg')
-    plt.show()
-
 if __name__ == "__main__":
+    
     x_train, y_train, x_test, y_test = load_mnist()
     
-    x_train = x_train.cuda()
-    y_train = y_train.cuda()
+    x_train = x_train.to(device)
+    y_train = y_train.to(device)
 
     fc_architectures = [[784, 50, 10], [784, 150, 10], [784, 250, 10]]
     no_layers = 3
 
-    #fc_times, fc_accs, conv_times, conv_accs = show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers)
-    #graph_stats(fc_times, fc_accs, conv_times, conv_accs)
-    #graph_details(fc_times, fc_accs, conv_times, conv_accs)
+    # fc_times, fc_accs, conv_times, conv_accs = show_stats(x_train, y_train, x_test, y_test, fc_architectures, no_layers)
+    # graph_stats(fc_times, fc_accs, conv_times, conv_accs)
+    # graph_details(fc_times, fc_accs, conv_times, conv_accs)
 
     model = torch.load('./models/conv_model_2.txt')
-    #train_acc, test_acc = evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500)
-    #print("Test accuracy:")
-    #print(test_acc)
+    # train_acc, test_acc = evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500)
+    # print("Test accuracy:")
+    # print(test_acc)
 
     attack_model_test(model, x_test, y_test)
 
 
-    """
-    start_time = time.time()
-    model = FCmodel(torch.relu, 784, 250, 10).to(device)
-    losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)
+    # model = FCmodel(torch.relu, 784, 250, 10).to(device)
+    # losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)
 
     # model = ConvModel().to(device)
     # losses, train_accuracies = train(model, x_train, y_train, param_niter=10, param_delta=0.07, batch_size=50, epoch_print=1, conv=True)
 
-    print("--- %s seconds ---" % (time.time() - start_time))
-    #torch.save(model, './models/fcmodel2.txt')
+    # torch.save(model, './models_old/fcmodel2.txt')
 
-    model = torch.load('./models/convmodel2.txt')
-
-    show_loss(losses)
-    show_weights(model.weights[0])
-    show_train_accuracies(train_accuracies, 300, "fcmodel1_train_acc.jpg", "./stats/")
-    show_train_accuracies(train_accuracies, 10, "convmodel1_train_acc.jpg", "./stats/")
-    """    
+    # show_loss(losses)
+    # show_train_accuracies(train_accuracies, 300, "fcmodel1_train_acc.jpg", "./stats/")
+    # show_train_accuracies(train_accuracies, 10, "convmodel1_train_acc.jpg", "./stats/")
