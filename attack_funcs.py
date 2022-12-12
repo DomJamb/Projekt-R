@@ -6,7 +6,7 @@ from train_util import eval
 from graphing_funcs import graph_attack, graph_attack_accuracies
 from AdvExample import AdvExample
 
-def attack(image, data_grad, koef=0.3):
+def attack_fgsm(image, data_grad, koef=0.3):
     data_grad = torch.sign(data_grad)
     attacked_image = image + data_grad * koef
     return torch.clamp(attacked_image, min=0, max=1)
@@ -37,14 +37,15 @@ def attack_model_test(model, x_test, y_test, koefs=[0.1, 0.2, 0.3], adv_cnt=3):
                 continue
             
             correct_class_oh = np.zeros(10)
-            correct_class_oh[int(correct_class)-1] = 1
+            correct_class_oh[int(correct_class)] = 1
+
             loss = get_loss(probs, torch.tensor(correct_class_oh).to(device))
 
             model.zero_grad()
             loss.backward()
 
             data_grad = input.grad.data
-            attacked_image = attack(input, data_grad, koef)
+            attacked_image = attack_fgsm(input, data_grad, koef)
 
             tprobs = eval(model, attacked_image.to(device))
             attacked_pred = np.argmax(tprobs, axis=1)
