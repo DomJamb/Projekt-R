@@ -5,7 +5,7 @@ def get_loss(X, Yoh_):
     return -torch.mean(torch.sum(Yoh_ * torch.log(X + 1e-20), dim=1))
 
 def eval(model, X):
-    return model.forward(torch.Tensor(X)).detach().cpu().numpy()
+    return model.forward(torch.tensor(X)).detach().cpu().numpy()
 
 def eval_after_epoch(model, x, y_):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
