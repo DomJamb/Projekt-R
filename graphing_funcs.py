@@ -94,7 +94,7 @@ def graph_attack(adv_dict):
             i += 1
 
     plt.subplots_adjust(top=0.75)
-    #plt.savefig('./stats/adversarial_examples.jpg')
+    #plt.savefig('./stats/adversarial_examples_pgd.jpg')
     plt.show()
 
 def graph_attack_accuracies(adv_accs):
@@ -106,5 +106,5 @@ def graph_attack_accuracies(adv_accs):
     plt.xlabel("Coefficients")
     plt.ylabel("Accuracies")
     plt.title("Coefficient/Accuracy graph for convolutional model")
-    #plt.savefig('./stats/graph_attack_accuracies.jpg')
+    #plt.savefig('./stats/graph_attack_accuracies_pgd.jpg')
     plt.show()

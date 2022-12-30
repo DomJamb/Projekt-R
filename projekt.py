@@ -7,7 +7,7 @@ import time
 from util import load_mnist, class_to_onehot
 from train_util import get_loss, eval_after_epoch
 from test_util import evaluate_model
-from attack_funcs import attack_model_test
+from attack_funcs import attack_model_test, attack_model_pgd
 from graphing_funcs import show_loss, show_train_accuracies, show_weights, graph_stats, graph_details
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -204,8 +204,8 @@ if __name__ == "__main__":
     # print("Test accuracy:")
     # print(test_acc)
 
-    attack_model_test(model, x_test, y_test)
-
+    #attack_model_test(model, x_test, y_test)
+    attack_model_pgd(model, x_test, y_test)
 
     # model = FCmodel(torch.relu, 784, 250, 10).to(device)
     # losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)
