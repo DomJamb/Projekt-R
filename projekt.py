@@ -209,8 +209,8 @@ if __name__ == "__main__":
     # acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), preds)
     # print(acc)
 
-    attack_model_fgsm(model, x_test, y_test)
-    #attack_model_pgd(model, x_test, y_test)
+    # attack_model_fgsm(model, x_test, y_test)
+    attack_model_pgd(model, x_test, y_test)
 
     # model = FCmodel(torch.relu, 784, 250, 10).to(device)
     # losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)

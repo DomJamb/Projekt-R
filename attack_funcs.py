@@ -58,9 +58,6 @@ def attack_model_pgd(model, x_test, y_test, eps_list=[0.1, 0.2, 0.3], koefs_it=[
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
 
-    y_test_oh = class_to_onehot(y_test.detach().cpu())
-    y_test_oh = torch.tensor(y_test_oh).to(device)
-
     adv_dict = dict()
     adv_accs = dict()
 
@@ -69,7 +66,10 @@ def attack_model_pgd(model, x_test, y_test, eps_list=[0.1, 0.2, 0.3], koefs_it=[
         print(f"Attacking with coefficient: {eps}...")
         permutations = torch.randperm(len(x_test))
         x_test = x_test.detach()[permutations]
-        y_test_oh = y_test_oh.detach()[permutations]
+        y_test = y_test.detach()[permutations]
+
+        y_test_oh = class_to_onehot(y_test.detach().cpu())
+        y_test_oh = torch.tensor(y_test_oh).to(device)
 
         probs = model(x_test.to(device))
         y_pred = np.argmax(probs.detach().cpu().numpy(), axis=1)
@@ -102,9 +102,6 @@ def attack_model_fgsm(model, x_test, y_test, eps_list=[0.1, 0.2, 0.3]):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
 
-    y_test_oh = class_to_onehot(y_test.detach().cpu())
-    y_test_oh = torch.tensor(y_test_oh).to(device)
-
     adv_dict = dict()
     adv_accs = dict()
 
@@ -113,7 +110,10 @@ def attack_model_fgsm(model, x_test, y_test, eps_list=[0.1, 0.2, 0.3]):
         print(f"Attacking with coefficient: {eps}...")
         permutations = torch.randperm(len(x_test))
         x_test = x_test.detach()[permutations]
-        y_test_oh = y_test_oh.detach()[permutations]
+        y_test = y_test.detach()[permutations]
+
+        y_test_oh = class_to_onehot(y_test.detach().cpu())
+        y_test_oh = torch.tensor(y_test_oh).to(device)
 
         probs = model(x_test.to(device))
         y_pred = np.argmax(probs.detach().cpu().numpy(), axis=1)
