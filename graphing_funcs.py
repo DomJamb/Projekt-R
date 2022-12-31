@@ -108,3 +108,41 @@ def graph_attack_accuracies(adv_accs):
     plt.title("Coefficient/Accuracy graph for convolutional model")
     # plt.savefig('./stats/graph_attack_accuracies_pgd.jpg')
     plt.show()
+
+def graph_adv_examples(adv_dict):
+    fig = plt.figure(figsize=(20,10))
+    length = len(adv_dict.keys())
+    keys = list(adv_dict.keys())
+
+    subfigs = fig.subfigures(nrows=length, ncols=1)
+    if not isinstance(subfigs, np.ndarray):
+        subfigs = [subfigs]
+
+    for row, subfig in enumerate(subfigs):
+        key = keys[row]
+        adv_list = adv_dict[key]
+        adv_cnt = len(adv_list)
+        subfig.suptitle(f'Ispravna oznaka: {key}', fontweight='bold')
+
+        axs = subfig.subplots(nrows=1, ncols=adv_cnt * 2)
+        i = 0
+
+        for adv in adv_list:
+            ax = axs[i]
+            ax.plot()
+            ax.imshow((adv.initial_img).reshape(28, 28))
+            ax.set_title(f"Predikcija za originalnu sliku: {adv.inital_pred}")
+            ax.axis('off')
+            i += 1
+
+            ax = axs[i]
+            ax.plot()
+            ax.imshow((adv.attacked_img).reshape(28, 28))
+            ax.set_title(f"Predikcija za izmijenjenu sliku: {adv.attacked_pred}")
+            ax.axis('off')
+            i += 1
+
+    plt.subplots_adjust(top=0.75)
+    # plt.savefig('./stats/robust_adv_examples.jpg')
+    # plt.savefig('./stats/nonrobust_adv_examples.jpg')
+    plt.show()

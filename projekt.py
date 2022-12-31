@@ -8,7 +8,8 @@ from util import load_mnist, class_to_onehot
 from train_util import get_loss, eval_after_epoch, eval_perf_multi, eval
 from test_util import evaluate_model
 from attack_funcs import attack_model_fgsm, attack_pgd, attack_model_pgd, train_robust
-from graphing_funcs import show_loss, show_train_accuracies, show_weights, graph_stats, graph_details
+from graphing_funcs import show_loss, show_train_accuracies, show_weights, graph_stats, graph_details, graph_adv_examples
+from AdvExample import AdvExample
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -250,6 +251,18 @@ if __name__ == "__main__":
     robust_adv_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), adv_preds) 
     print(f"Robust model accuracy on adversarial images: {robust_adv_acc}")
 
+    ### Generate adversarial examples
+
+    adv_dict = dict()
+    for i in range(len(y_test)):
+        if y_test[i] in list(adv_dict.keys()):
+            continue
+        adv_dict.update({y_test[i]: [AdvExample(int(preds[i]), int(adv_preds[i]), x_test[i].detach().cpu().numpy(), adv_images[i].detach().cpu().numpy())]})
+        if len(list(adv_dict.keys())) == 3:
+            break
+    
+    graph_adv_examples(adv_dict)
+
 
     ### Training a nonrobust convolutional model
 
@@ -277,6 +290,18 @@ if __name__ == "__main__":
     adv_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), adv_preds) 
     print(f"Nonrobust model accuracy on adversarial images: {adv_acc}")
 
+    ### Generate adversarial examples
+
+    adv_dict = dict()
+    for i in range(len(y_test)):
+        if y_test[i] in list(adv_dict.keys()):
+            continue
+        adv_dict.update({y_test[i]: [AdvExample(int(preds[i]), int(adv_preds[i]), x_test[i].detach().cpu().numpy(), adv_images[i].detach().cpu().numpy())]})
+        if len(list(adv_dict.keys())) == 3:
+            break
+    
+    graph_adv_examples(adv_dict)
+
     barWidth = 0.25
     fig = plt.subplots(figsize=(12, 8))
     
@@ -297,5 +322,5 @@ if __name__ == "__main__":
             ['Normal images', 'Adversarial images'])
     
     plt.legend()
-    plt.savefig('./stats/robust_nonrobust_acc_comparison.jpg')
+    # plt.savefig('./stats/robust_nonrobust_acc_comparison.jpg')
     plt.show()
