@@ -7,7 +7,7 @@ import time
 from util import load_mnist, class_to_onehot
 from train_util import get_loss, eval_after_epoch, eval_perf_multi, eval
 from test_util import evaluate_model
-from attack_funcs import attack_model_fgsm, attack_model_pgd
+from attack_funcs import attack_model_fgsm, attack_pgd, attack_model_pgd, train_robust
 from graphing_funcs import show_loss, show_train_accuracies, show_weights, graph_stats, graph_details
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     # graph_stats(fc_times, fc_accs, conv_times, conv_accs)
     # graph_details(fc_times, fc_accs, conv_times, conv_accs)
 
-    model = torch.load('./models/conv_model_2.txt')
+    # model = torch.load('./models/conv_model_2.txt')
     # train_acc, test_acc = evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500)
     # print("Test accuracy:")
     # print(test_acc)
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     # print(acc)
 
     # attack_model_fgsm(model, x_test, y_test)
-    attack_model_pgd(model, x_test, y_test)
+    # attack_model_pgd(model, x_test, y_test)
 
     # model = FCmodel(torch.relu, 784, 250, 10).to(device)
     # losses, train_accuracies = train(model, x_train, y_train, param_niter=300, param_delta=0.07, batch_size=50, epoch_print=30)
@@ -223,3 +223,79 @@ if __name__ == "__main__":
     # show_loss(losses)
     # show_train_accuracies(train_accuracies, 300, "fcmodel1_train_acc.jpg", "./stats/")
     # show_train_accuracies(train_accuracies, 10, "convmodel1_train_acc.jpg", "./stats/")
+
+    ### Training a robust convolutional model
+
+    # conv_model_robust = ConvModel().to(device)
+    # losses, train_accuracies = train_robust(conv_model_robust, x_train, y_train, param_niter=10, param_delta=0.07, batch_size=100, epoch_print=1, conv=True)
+    # torch.save(conv_model_robust, './models_robust_comparison/robust_model_conv.txt')
+    conv_model_robust = torch.load('./models_robust_comparison/robust_model_conv.txt')
+    # print(f"Robust model train accuracy: {train_accuracies}")
+    
+    ### Evaluation of the robust model on the normal dataset
+
+    probs = eval(conv_model_robust, x_test.to(device))
+    preds = np.argmax(probs, axis=1)  
+    robust_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), preds) 
+    print(f"Robust model accuracy on normal images: {robust_acc}")
+
+    ### Evaluation of the robust model on adversarial examples
+
+    y_test_oh = class_to_onehot(y_test.detach().cpu())
+    y_test_oh = torch.tensor(y_test_oh).to(device)
+    adv_images = attack_pgd(conv_model_robust, x_test, y_test_oh, eps=0.3, steps=20)
+
+    adv_probs = eval(conv_model_robust, adv_images.to(device))
+    adv_preds = np.argmax(adv_probs, axis=1)  
+    robust_adv_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), adv_preds) 
+    print(f"Robust model accuracy on adversarial images: {robust_adv_acc}")
+
+
+    ### Training a nonrobust convolutional model
+
+    # conv_model = ConvModel().to(device)
+    # losses, train_accuracies = train(conv_model, x_train, y_train, param_niter=10, param_delta=0.07, batch_size=100, epoch_print=1, conv=True)
+    # torch.save(conv_model, './models_robust_comparison/nonrobust_model_conv.txt')
+    conv_model = torch.load('./models_robust_comparison/nonrobust_model_conv.txt')
+    # print(f"Nonrobust model train accuracy: {train_accuracies}")
+
+    ### Evaluation of the nonrobust model on the normal dataset
+
+    probs = eval(conv_model, x_test.to(device))
+    preds = np.argmax(probs, axis=1)  
+    acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), preds) 
+    print(f"Nonrobust model accuracy on normal images: {acc}")
+
+    ### Evaluation of the nonrobust model on adversarial examples
+
+    y_test_oh = class_to_onehot(y_test.detach().cpu())
+    y_test_oh = torch.tensor(y_test_oh).to(device)
+    adv_images = attack_pgd(conv_model, x_test, y_test_oh, eps=0.3, steps=20)
+
+    adv_probs = eval(conv_model, adv_images.to(device))
+    adv_preds = np.argmax(adv_probs, axis=1)  
+    adv_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), adv_preds) 
+    print(f"Nonrobust model accuracy on adversarial images: {adv_acc}")
+
+    barWidth = 0.25
+    fig = plt.subplots(figsize=(12, 8))
+    
+    robust = [robust_acc, robust_adv_acc]
+    nonrobust = [acc, adv_acc]
+    
+    br1 = np.arange(len(robust))
+    br2 = [(x + barWidth + 0.05) for x in br1]
+    
+    plt.bar(br1, robust, color ='g', width = barWidth,
+            edgecolor ='grey', label ='Convolutional model with robust training')
+    plt.bar(br2, nonrobust, color ='b', width = barWidth,
+            edgecolor ='grey', label ='Convolutional model without robust training')
+    
+    plt.xlabel('Dataset', fontweight ='bold', fontsize = 15)
+    plt.ylabel('Accuracy', fontweight ='bold', fontsize = 15)
+    plt.xticks([r + barWidth for r in range(len(robust))],
+            ['Normal images', 'Adversarial images'])
+    
+    plt.legend()
+    plt.savefig('./stats/robust_nonrobust_acc_comparison.jpg')
+    plt.show()

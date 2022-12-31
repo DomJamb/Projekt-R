@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from util import class_to_onehot
-from train_util import get_loss, eval, eval_perf_multi
+from train_util import get_loss, eval, eval_perf_multi, eval_after_epoch
 from graphing_funcs import graph_attack, graph_attack_accuracies
 from AdvExample import AdvExample
 
@@ -140,3 +140,49 @@ def attack_model_fgsm(model, x_test, y_test, eps_list=[0.1, 0.2, 0.3]):
 
     graph_attack(adv_dict)
     graph_attack_accuracies(adv_accs)
+
+def train_robust(model, X, Y, param_niter=1000, param_delta=1e-2, param_lambda=1e-3, batch_size=1000, epoch_print=100, conv=False):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    Yoh_ = class_to_onehot(Y.detach().cpu())
+    Yoh_ = torch.tensor(Yoh_).to(device)
+    
+    opt = torch.optim.SGD(model.parameters(), lr=param_delta)
+    losses = []
+    train_accuracies = []
+
+    for epoch in range(param_niter):
+        #print(f"_______________Epoha____________ {epoch}")
+        permutations = torch.randperm(len(X))
+        X_total = X.detach()[permutations]
+        Y_total = Yoh_.detach()[permutations]
+
+        X_batch = torch.split(X_total, batch_size)
+        Y_batch = torch.split(Y_total, batch_size)
+
+        temp_loss = []
+
+        for i, (x, y) in enumerate(zip(X_batch, Y_batch)):
+            adv_images = attack_pgd(model, x, y, eps=0.3)
+            adv_probs = model(adv_images)
+            adv_loss = get_loss(adv_probs, y) + (param_lambda * model.get_norm() if not conv else 0)
+            temp_loss.append(adv_loss.detach().cpu().item())
+            opt.zero_grad()
+            adv_loss.backward()
+            opt.step()
+
+            #print("Batch = " + str(i))
+            probs = model(x)
+            loss = get_loss(probs, y) + (param_lambda * model.get_norm() if not conv else 0)
+            temp_loss.append(loss.detach().cpu().item())
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+        loss = np.mean(temp_loss)
+        losses.append(loss)
+
+        if epoch % epoch_print == 0:
+            print(f'Epoch {epoch}/{param_niter} -> loss = {loss}')
+            train_accuracies.append(eval_after_epoch(model, X, Y.detach().cpu()))
+        
+    return losses, train_accuracies
