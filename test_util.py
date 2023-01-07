@@ -26,7 +26,7 @@ def evaluate_model(model, x_train, y_train, x_test, y_test, batch_size=500):
 
         #print("----------\nTrain data:\n----------")
         probs = []
-        #Evaluates in batches for better memory management
+        # Evaluates in batches for better memory management
         for x_train in X_batch: 
             probs.append(eval(model, x_train.to(device)))
         probs = np.array(probs).reshape(-1, 10)

@@ -2,6 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def show_loss(loss):
+    """
+    Function for showcasing the loss over epochs
+    Params:
+        loss: list of losses over epochs
+    """
+    # Loss over the epochs graph
     fig = plt.figure(figsize=(16, 10))
     plt.plot(range(len(loss)), np.array(loss), label="Loss")
     plt.xlabel("Epochs")
@@ -11,6 +17,16 @@ def show_loss(loss):
     plt.show()
 
 def show_train_accuracies(accs, epochs, name, path):
+    """
+    Function for showcasing the train accuracy of a model over epochs
+    Params:
+        acc: list of accuracies over epochs
+        epochs: total number of epochs
+        name: desired name of saved figure
+        path: desired path of saved figure
+    """
+
+    # Train accuracy over the epochs graph 
     fig = plt.figure(figsize=(16,5))
     epochs_step = epochs / 10
     epochs = np.arange(0, epochs, epochs_step)
@@ -22,6 +38,11 @@ def show_train_accuracies(accs, epochs, name, path):
     plt.show()
 
 def show_weights(weights):
+    """
+    Function for showcasing a weight matrix as a set of 28x28 pictures
+    Params:
+        weights: weight matrix 
+    """
     fig = plt.figure(figsize=(16, 8))
     for i in range(10):
         plt.subplot(2, 5, i + 1)
@@ -29,6 +50,15 @@ def show_weights(weights):
     plt.show()
 
 def graph_stats(fc_times, fc_accs, conv_times, conv_accs):
+    """
+    Function for showcasing the accuracy/train time graph for fully connected models and convolutional models
+    Params:
+        fc_times: list of measured train times for fully connected models
+        fc_accs: list of calculated test data accuracies for fully connected models
+        conv_times: list of measured train times for convolutional models
+        conv_accs: list of calculated test data accuracies for convolutional models
+    """
+    # Accuracy/train time graph for different models
     fig = plt.figure(figsize=(16,5))
     plt.plot(fc_accs, fc_times, 'r', label="FC model")
     plt.plot(conv_accs, conv_times, 'b', label="Conv model")
@@ -39,9 +69,18 @@ def graph_stats(fc_times, fc_accs, conv_times, conv_accs):
     plt.show()
 
 def graph_details(fc_times, fc_accs, conv_times, conv_accs):
+    """
+    Function for showcasing the comparison of train times and accuracies for different models
+    Params:
+        fc_times: list of measured train times for fully connected models
+        fc_accs: list of calculated test data accuracies for fully connected models
+        conv_times: list of measured train times for convolutional models
+        conv_accs: list of calculated test data accuracies for convolutional models
+    """
     layer_num = [1, 2, 3]
     fig = plt.figure(figsize=(16,10))
 
+    # Train time comparison for different models
     plt.subplot(2, 1, 1)
     plt.plot(layer_num, fc_times, 'r', label="FC model")
     plt.plot(layer_num, conv_times, 'b', label="Conv model")
@@ -50,6 +89,7 @@ def graph_details(fc_times, fc_accs, conv_times, conv_accs):
     plt.title("Number of layers / Train time graph for FC and Conv models")
     plt.legend(loc="center right")
 
+    # Accuracy comparison for different models
     plt.subplot(2, 1, 2)
     plt.plot(layer_num, fc_accs, 'r', label="FC model")
     plt.plot(layer_num, conv_accs, 'b', label="Conv model")
@@ -61,6 +101,11 @@ def graph_details(fc_times, fc_accs, conv_times, conv_accs):
     plt.show()
 
 def graph_attack(adv_dict):
+    """
+    Function for showcasing the adversarial examples generated using different epsilon coefficients
+    Params:
+        adv_dict: dict[eps: list<advExample>]
+    """
     fig = plt.figure(figsize=(20,10))
     length = len(adv_dict.keys())
     keys = list(adv_dict.keys())
@@ -69,6 +114,7 @@ def graph_attack(adv_dict):
     if not isinstance(subfigs, np.ndarray):
         subfigs = [subfigs]
 
+    # Show adversarial examples for each coefficient in seperate row
     for row, subfig in enumerate(subfigs):
         key = keys[row]
         adv_list = adv_dict[key]
@@ -78,6 +124,7 @@ def graph_attack(adv_dict):
         axs = subfig.subplots(nrows=1, ncols=adv_cnt * 2)
         i = 0
 
+        # Show adversarial examples for given coefficient
         for adv in adv_list:    
             ax = axs[i]
             ax.plot()
@@ -98,9 +145,15 @@ def graph_attack(adv_dict):
     plt.show()
 
 def graph_attack_accuracies(adv_accs):
+    """
+    Function for accuracies of a given model on adversarial examples
+    Params:
+        adv_accs: list of accuracies of a given model on adversarial examples
+    """
     koefs = np.array(list(adv_accs.keys()))
     accs = np.array(list(adv_accs.values()))
 
+    # Coefficient/Accuracy graph for given model on adversarial examples
     fig = plt.figure(figsize=(16,5))
     plt.plot(koefs, accs, 'b')
     plt.xlabel("Coefficients")
@@ -110,6 +163,11 @@ def graph_attack_accuracies(adv_accs):
     plt.show()
 
 def graph_adv_examples(adv_dict):
+    """
+    Function for showcasing the adversarial examples of a given model
+    Params:
+        adv_dict: dict[correctlabel: list<advExample>]
+    """
     fig = plt.figure(figsize=(20,10))
     length = len(adv_dict.keys())
     keys = list(adv_dict.keys())
@@ -118,6 +176,7 @@ def graph_adv_examples(adv_dict):
     if not isinstance(subfigs, np.ndarray):
         subfigs = [subfigs]
 
+    # Show adversarial examples for each correct label
     for row, subfig in enumerate(subfigs):
         key = keys[row]
         adv_list = adv_dict[key]

@@ -39,7 +39,7 @@ def eval_after_epoch(model, x, y_):
     x_batch = torch.split(x, batch_size)
 
     probs = []
-    #Evaluates in batches for better memory management
+    # Evaluates in batches for better memory management
     for x in x_batch: 
         probs.append(eval(model, x.to(device)))
     probs = np.array(probs).reshape(-1, 10)
