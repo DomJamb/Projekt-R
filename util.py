@@ -2,6 +2,16 @@ import numpy as np
 from torchvision import datasets
 
 def load_mnist(dataset_root="./data/"):
+    """
+    Function for loading the mnist dataset
+    Params:
+        dataset_root: path to dataset
+    Returns:
+        x_train: train data
+        y_train: train labels
+        x_test: test data
+        y_test: test labels
+    """
     mnist_train = datasets.MNIST(dataset_root, train=True, download=False)
     mnist_test = datasets.MNIST(dataset_root, train=False, download=False)
 
@@ -12,6 +22,13 @@ def load_mnist(dataset_root="./data/"):
     return x_train, y_train, x_test, y_test
 
 def class_to_onehot(Y):
+    """
+    Function for converting a list to its one hot notation form for easier adressing
+    Params:
+        Y: numerical labels
+    Returns:
+        Yoh: 2d array labels in one hot notation
+    """
     Yoh = np.zeros((len(Y), max(Y) + 1))
     Yoh[range(len(Y)), Y] = 1
     return Yoh
