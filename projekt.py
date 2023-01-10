@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import os
 
 from util import load_mnist, class_to_onehot
 from train_util import get_loss, eval_after_epoch, eval_perf_multi, eval
@@ -322,41 +323,49 @@ if __name__ == "__main__":
     ### Generation of targeted attack images and evaluation on them
     
     adv_dict = dict()
-    no_of_steps = 100
-    epsilon = 0.75
-    koef_iteration = 0.035
+    no_of_steps = 400
+    epsilon = 0.9
+    koef_iteration = 0.025
+
+    str = f"./targeted_adv_examples/epsilon_{epsilon}_no_steps_{no_of_steps}_koef_iter_{koef_iteration}"
+    if not os.path.exists(str):
+        os.makedirs(str)
+
+    generate_x = x_test[0:20]
+    generate_y = y_test[0:20]
+
     for desired_class in range(5):
         print(f"Generating adverserial examples with target class {desired_class}...")
-        targeted_adv_images = attack_pgd_directed(conv_model_robust, x_test, y_test, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
+        targeted_adv_images = attack_pgd_directed(conv_model_robust, generate_x, generate_y, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
         probs = eval(conv_model_robust, targeted_adv_images.to(device))
         preds = np.argmax(probs, axis=1)
-        targeted_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), preds) 
+        targeted_acc, _ , _ = eval_perf_multi(generate_y.detach().cpu().numpy(), preds) 
         print(f"Robust model accuracy on targeted PGD images with target class {desired_class}: {targeted_acc}")
 
         targeted_examples = targeted_adv_images.detach().cpu().numpy()
         adv_list = list()
         for i in range(4):
-            adv_list.append(TargetedAdvExample(x_test[i], targeted_examples[i]))
+            adv_list.append(TargetedAdvExample(generate_x[i], targeted_examples[i]))
         adv_dict.update({desired_class: adv_list})
 
-    graph_targeted_examples(adv_dict, pathname=f"./stats/targeted_adv_eps_{epsilon}_steps_{no_of_steps}_it_{koef_iteration}_1.jpg")
+    graph_targeted_examples(adv_dict, pathname=f"./targeted_adv_examples/epsilon_{epsilon}_no_steps_{no_of_steps}_koef_iter_{koef_iteration}/1.jpg")
 
     adv_dict = dict()
     for desired_class in range(5,10):
         print(f"Generating adverserial examples with target class {desired_class}...")
-        targeted_adv_images = attack_pgd_directed(conv_model_robust, x_test, y_test, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
+        targeted_adv_images = attack_pgd_directed(conv_model_robust, generate_x, generate_y, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
         probs = eval(conv_model_robust, targeted_adv_images.to(device))
         preds = np.argmax(probs, axis=1)
-        targeted_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), preds) 
+        targeted_acc, _ , _ = eval_perf_multi(generate_y.detach().cpu().numpy(), preds) 
         print(f"Robust model accuracy on targeted PGD images with target class {desired_class}: {targeted_acc}")
 
         targeted_examples = targeted_adv_images.detach().cpu().numpy()
         adv_list = list()
         for i in range(4):
-            adv_list.append(TargetedAdvExample(x_test[i], targeted_examples[i]))
+            adv_list.append(TargetedAdvExample(generate_x[i], targeted_examples[i]))
         adv_dict.update({desired_class: adv_list})
 
-    graph_targeted_examples(adv_dict, pathname=f"./stats/targeted_adv_eps_{epsilon}_steps_{no_of_steps}_it_{koef_iteration}_2.jpg")
+    graph_targeted_examples(adv_dict, pathname=f"./targeted_adv_examples/epsilon_{epsilon}_no_steps_{no_of_steps}_koef_iter_{koef_iteration}/2.jpg")
     quit()
 
     ### Evaluation of the robust model on the normal dataset
