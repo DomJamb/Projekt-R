@@ -323,16 +323,16 @@ if __name__ == "__main__":
     ### Generation of targeted attack images and evaluation on them
     
     adv_dict = dict()
-    no_of_steps = 400
-    epsilon = 0.9
-    koef_iteration = 0.025
+    no_of_steps = 100
+    epsilon = 1
+    koef_iteration = 0.02
 
     str = f"./targeted_adv_examples/epsilon_{epsilon}_no_steps_{no_of_steps}_koef_iter_{koef_iteration}"
     if not os.path.exists(str):
         os.makedirs(str)
 
-    generate_x = x_test[0:20]
-    generate_y = y_test[0:20]
+    generate_x = x_test[0:10]
+    generate_y = y_test[0:10]
 
     for desired_class in range(5):
         print(f"Generating adverserial examples with target class {desired_class}...")
