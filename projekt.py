@@ -7,9 +7,10 @@ import time
 from util import load_mnist, class_to_onehot
 from train_util import get_loss, eval_after_epoch, eval_perf_multi, eval
 from test_util import evaluate_model
-from attack_funcs import attack_model_fgsm, attack_pgd, attack_model_pgd, train_robust
-from graphing_funcs import show_loss, show_train_accuracies, show_weights, graph_stats, graph_details, graph_adv_examples
+from attack_funcs import attack_model_fgsm, attack_pgd, attack_model_pgd, train_robust, attack_pgd_directed
+from graphing_funcs import show_loss, show_train_accuracies, show_weights, graph_stats, graph_details, graph_adv_examples, graph_targeted_examples
 from AdvExample import AdvExample
+from TargetedAdvExample import TargetedAdvExample
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -318,6 +319,46 @@ if __name__ == "__main__":
     conv_model_robust = torch.load('./models_robust_comparison/robust_model_conv.txt')
     # print(f"Robust model train accuracy: {train_accuracies}")
     
+    ### Generation of targeted attack images and evaluation on them
+    
+    adv_dict = dict()
+    no_of_steps = 500
+    epsilon = 0.6
+    koef_iteration = 0.001
+    for desired_class in range(5):
+        print(f"Generating adverserial examples with target class {desired_class}...")
+        targeted_adv_images = attack_pgd_directed(conv_model_robust, x_test, y_test, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
+        probs = eval(conv_model_robust, targeted_adv_images.to(device))
+        preds = np.argmax(probs, axis=1)
+        targeted_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), preds) 
+        print(f"Robust model accuracy on targeted PGD images with target class {desired_class}: {targeted_acc}")
+
+        targeted_examples = targeted_adv_images.detach().cpu().numpy()
+        adv_list = list()
+        for i in range(4):
+            adv_list.append(TargetedAdvExample(x_test[i], targeted_examples[i]))
+        adv_dict.update({desired_class: adv_list})
+
+    graph_targeted_examples(adv_dict, pathname="./stats/targeted_adversarial_examples1.jpg")
+
+    adv_dict = dict()
+    for desired_class in range(5,10):
+        print(f"Generating adverserial examples with target class {desired_class}...")
+        targeted_adv_images = attack_pgd_directed(conv_model_robust, x_test, y_test, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
+        probs = eval(conv_model_robust, targeted_adv_images.to(device))
+        preds = np.argmax(probs, axis=1)
+        targeted_acc, _ , _ = eval_perf_multi(y_test.detach().cpu().numpy(), preds) 
+        print(f"Robust model accuracy on targeted PGD images with target class {desired_class}: {targeted_acc}")
+
+        targeted_examples = targeted_adv_images.detach().cpu().numpy()
+        adv_list = list()
+        for i in range(4):
+            adv_list.append(TargetedAdvExample(x_test[i], targeted_examples[i]))
+        adv_dict.update({desired_class: adv_list})
+
+    graph_targeted_examples(adv_dict, pathname="./stats/targeted_adversarial_examples2.jpg")
+    quit()
+
     ### Evaluation of the robust model on the normal dataset
 
     probs = eval(conv_model_robust, x_test.to(device))

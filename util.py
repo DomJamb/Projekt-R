@@ -29,6 +29,6 @@ def class_to_onehot(Y):
     Returns:
         Yoh: 2d array labels in one hot notation
     """
-    Yoh = np.zeros((len(Y), max(Y) + 1))
+    Yoh = np.zeros((len(Y), 10))
     Yoh[range(len(Y)), Y] = 1
     return Yoh

@@ -59,7 +59,7 @@ def eval_perf_multi(Y, Y_):
         M: confusion matrix based on based on correct labels and prediction
     """
     pr = []
-    n = max(Y_) + 1
+    n = 10
     M = np.bincount(n * Y_ + Y, minlength=n * n).reshape(n, n)
     for i in range(n):
         tp_i = M[i, i]

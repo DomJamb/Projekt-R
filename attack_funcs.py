@@ -83,6 +83,54 @@ def attack_pgd(model, images, labels, eps=0.3, koef_it=0.05, steps=7):
 
     return adv_examples
 
+def attack_pgd_directed(model, images, labels, eps=0.3, koef_it=0.05, steps=7, target_class=0):
+    """
+    Function for generating adversarial examples using the PGD attack (directed variant)
+    Params:
+        model:  arbitrary deep model
+        images: data
+        labels: correct labels for given data
+        eps: maximum change threshold of individual pixels in given data
+        koef_it: maximum change threshold of individual pixels in given data for each iteration
+        steps: number of iterations
+        target_class: target class for loss minimization
+    Returns:
+        adv_examples: adversarial examples generated using the PGD attack
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.eval()
+
+    images = images.clone().detach().to(device)
+    labels = labels.clone().detach().to(device)
+    target_labels = torch.full(labels.shape, target_class)
+
+    target_labels = class_to_onehot(target_labels)
+    target_labels = torch.tensor(target_labels).to(device)
+
+    adv_examples = images.clone().detach()
+
+    # Modify the images in each iteration
+    for _ in range(steps):
+        adv_examples = adv_examples.to(device)
+        adv_examples.requires_grad = True
+
+        # Calculate loss for given data
+        probs = model(adv_examples)
+        loss = get_loss(probs, target_labels)
+
+        model.zero_grad()
+        loss.backward()
+
+        # Calculate gradient for given data
+        data_grad = adv_examples.grad.data
+
+        # Modify adversarial examples and clamp them so each pixel is not changed more than eps and is between 0 and 1
+        adv_examples = adv_examples.detach() - koef_it * data_grad.sign()
+        delta = torch.clamp(adv_examples - images, min=-eps, max=eps)
+        adv_examples = torch.clamp(images + delta, min=0, max=1).detach()
+
+    return adv_examples
+
 def attack_model_pgd(model, x_test, y_test, eps_list=[0.1, 0.2, 0.3], koefs_it=[0.01, 0.03, 0.05]):
     """
     Function for showcasing the generated adversarial examples as well as the accuracy of a given model on them using the PGD attack
