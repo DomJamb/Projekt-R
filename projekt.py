@@ -324,10 +324,10 @@ if __name__ == "__main__":
     
     adv_dict = dict()
     no_of_steps = 100
-    epsilon = 1
-    koef_iteration = 0.02
+    perturbation_norm_restr = 1
+    opt_step = 0.02
 
-    str = f"./targeted_adv_examples/epsilon_{epsilon}_no_steps_{no_of_steps}_koef_iter_{koef_iteration}"
+    str = f"./targeted_adv_examples/perturbation_norm_restr_{perturbation_norm_restr}_no_steps_{no_of_steps}_opt_step_{opt_step}"
     if not os.path.exists(str):
         os.makedirs(str)
 
@@ -336,7 +336,7 @@ if __name__ == "__main__":
 
     for desired_class in range(5):
         print(f"Generating adverserial examples with target class {desired_class}...")
-        targeted_adv_images = attack_pgd_directed(conv_model_robust, generate_x, generate_y, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
+        targeted_adv_images = attack_pgd_directed(conv_model_robust, generate_x, generate_y, target_class=desired_class, steps=no_of_steps, eps=perturbation_norm_restr, koef_it=opt_step)
         probs = eval(conv_model_robust, targeted_adv_images.to(device))
         preds = np.argmax(probs, axis=1)
         targeted_acc, _ , _ = eval_perf_multi(generate_y.detach().cpu().numpy(), preds) 
@@ -348,12 +348,12 @@ if __name__ == "__main__":
             adv_list.append(TargetedAdvExample(generate_x[i], targeted_examples[i]))
         adv_dict.update({desired_class: adv_list})
 
-    graph_targeted_examples(adv_dict, pathname=f"./targeted_adv_examples/epsilon_{epsilon}_no_steps_{no_of_steps}_koef_iter_{koef_iteration}/1.jpg")
+    graph_targeted_examples(adv_dict, pathname=f"./targeted_adv_examples/perturbation_norm_restr_{perturbation_norm_restr}_no_steps_{no_of_steps}_opt_step_{opt_step}/1.png")
 
     adv_dict = dict()
     for desired_class in range(5,10):
         print(f"Generating adverserial examples with target class {desired_class}...")
-        targeted_adv_images = attack_pgd_directed(conv_model_robust, generate_x, generate_y, target_class=desired_class, steps=no_of_steps, eps=epsilon, koef_it=koef_iteration)
+        targeted_adv_images = attack_pgd_directed(conv_model_robust, generate_x, generate_y, target_class=desired_class, steps=no_of_steps, eps=perturbation_norm_restr, koef_it=opt_step)
         probs = eval(conv_model_robust, targeted_adv_images.to(device))
         preds = np.argmax(probs, axis=1)
         targeted_acc, _ , _ = eval_perf_multi(generate_y.detach().cpu().numpy(), preds) 
@@ -365,7 +365,7 @@ if __name__ == "__main__":
             adv_list.append(TargetedAdvExample(generate_x[i], targeted_examples[i]))
         adv_dict.update({desired_class: adv_list})
 
-    graph_targeted_examples(adv_dict, pathname=f"./targeted_adv_examples/epsilon_{epsilon}_no_steps_{no_of_steps}_koef_iter_{koef_iteration}/2.jpg")
+    graph_targeted_examples(adv_dict, pathname=f"./targeted_adv_examples/perturbation_norm_restr_{perturbation_norm_restr}_no_steps_{no_of_steps}_opt_step_{opt_step}/2.png")
     quit()
 
     ### Evaluation of the robust model on the normal dataset
