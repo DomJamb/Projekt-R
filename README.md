@@ -1,4 +1,4 @@
-# Projekt_R
+# Projekt-R
 
 Klasifikacija slika iz skupa MNIST koristeći konfigurabilne potpuno povezane i konvolucijske modele s proizvoljnom arhitekturom.
 
